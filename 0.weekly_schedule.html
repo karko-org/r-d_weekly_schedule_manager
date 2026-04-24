@@ -1172,6 +1172,14 @@
           if (twin && document.activeElement !== twin) twin.value = task.title;
         }
       });
+      // Enter → 저장(input 이벤트로 이미 적용됨) + 섹션 접기
+      titleEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter'){
+          e.preventDefault();
+          titleEl.blur();
+          setTwCollapsed(true);
+        }
+      });
 
       editBtn.addEventListener('click', () => {
         // 인라인 편집 대신 상세 모달 열기 (저장/X로 명시적 처리)
