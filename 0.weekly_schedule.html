@@ -139,10 +139,11 @@
   .all-section.is-collapsed .tw-header{margin-bottom:0;padding-bottom:0;border-bottom:none}
   .all-section.is-collapsed .all-content{display:none}
   .all-section:not(.is-collapsed) .tw-collapse-btn .chevron{transform:rotate(90deg)}
-  .all-sort-select{font-family:inherit;font-size:12px;padding:5px 28px 5px 10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink-2);cursor:pointer;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);background-position:calc(100% - 14px) 50%, calc(100% - 10px) 50%;background-size:4px 4px, 4px 4px;background-repeat:no-repeat}
-  .all-sort-select:hover{border-color:var(--ink-2);color:var(--ink)}
-  .all-sort-select:focus{outline:none;border-color:var(--accent)}
-  .all-section.is-collapsed .all-sort-select{display:none}
+  .sort-select{font-family:inherit;font-size:12px;padding:5px 28px 5px 10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink-2);cursor:pointer;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);background-position:calc(100% - 14px) 50%, calc(100% - 10px) 50%;background-size:4px 4px, 4px 4px;background-repeat:no-repeat}
+  .sort-select:hover{border-color:var(--ink-2);color:var(--ink)}
+  .sort-select:focus{outline:none;border-color:var(--accent)}
+  .all-section.is-collapsed .sort-select,
+  .tw-section.is-collapsed .sort-select{display:none}
   .chevron{display:inline-block;transition:transform 0.2s;font-size:10px;color:var(--muted);width:12px}
   .all-content{padding-top:4px}
   .task-list{display:flex;flex-direction:column;gap:6px}
@@ -319,6 +320,14 @@
         <span class="tw-range" id="tw-range"></span>
       </div>
       <div class="tw-header-right">
+        <select class="sort-select" id="tw-sort-field" aria-label="정렬 기준">
+          <option value="date">날짜순</option>
+          <option value="title">제목순</option>
+        </select>
+        <select class="sort-select" id="tw-sort-dir" aria-label="정렬 방향">
+          <option value="asc">오름차순</option>
+          <option value="desc">내림차순</option>
+        </select>
         <span class="task-count" id="tw-count"></span>
         <button class="tw-collapse-btn" id="tw-collapse-btn" aria-expanded="false" aria-label="접기/펼치기">
           <span class="chevron">▶</span>
@@ -335,11 +344,11 @@
         <span class="tw-badge" id="all-section-badge"></span>
       </div>
       <div class="tw-header-right">
-        <select class="all-sort-select" id="all-sort-field" aria-label="정렬 기준">
+        <select class="sort-select" id="all-sort-field" aria-label="정렬 기준">
           <option value="date">날짜순</option>
           <option value="title">제목순</option>
         </select>
-        <select class="all-sort-select" id="all-sort-dir" aria-label="정렬 방향">
+        <select class="sort-select" id="all-sort-dir" aria-label="정렬 방향">
           <option value="asc">오름차순</option>
           <option value="desc">내림차순</option>
         </select>
@@ -487,6 +496,8 @@
   const ANNUAL_YEAR_KEY = 'kar_current_annual_year_v1';
   const ALL_SORT_FIELD_KEY = 'kar_all_sort_field_v1'; // 'date' | 'title'
   const ALL_SORT_DIR_KEY = 'kar_all_sort_dir_v1';     // 'asc' | 'desc'
+  const TW_SORT_FIELD_KEY = 'kar_tw_sort_field_v1';
+  const TW_SORT_DIR_KEY = 'kar_tw_sort_dir_v1';
 
   const FS_API_SUPPORTED = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 
@@ -526,23 +537,43 @@
   let monthData = loadAll();
   let focusedTaskId = null;
   let allSectionOpen = false;
-  let allSortField = (function(){
-    try { const v = localStorage.getItem(ALL_SORT_FIELD_KEY); return (v === 'title') ? 'title' : 'date'; }
+  function loadSortField(key){
+    try { const v = localStorage.getItem(key); return (v === 'title') ? 'title' : 'date'; }
     catch(e){ return 'date'; }
-  })();
-  let allSortDir = (function(){
-    try { const v = localStorage.getItem(ALL_SORT_DIR_KEY); return (v === 'desc') ? 'desc' : 'asc'; }
+  }
+  function loadSortDir(key){
+    try { const v = localStorage.getItem(key); return (v === 'desc') ? 'desc' : 'asc'; }
     catch(e){ return 'asc'; }
-  })();
+  }
+  let allSortField = loadSortField(ALL_SORT_FIELD_KEY);
+  let allSortDir = loadSortDir(ALL_SORT_DIR_KEY);
+  let twSortField = loadSortField(TW_SORT_FIELD_KEY);
+  let twSortDir = loadSortDir(TW_SORT_DIR_KEY);
 
-  function sortTasks(tasks){
+  function sortTasks(tasks, field, dir){
     const arr = [...tasks];
-    if (allSortField === 'title'){
+    if (field === 'title'){
       arr.sort((a,b) => (a.title||'').localeCompare(b.title||'', 'ko'));
     } else { // date
       arr.sort((a,b) => a.start - b.start || (a.title||'').localeCompare(b.title||'', 'ko'));
     }
-    if (allSortDir === 'desc') arr.reverse();
+    if (dir === 'desc') arr.reverse();
+    return arr;
+  }
+
+  // renderThisWeek의 results({task, y, m, monthKey}[])용 — 여러 달 걸치는 주를 고려해 실제 Date로 비교
+  function sortResults(results, field, dir){
+    const arr = [...results];
+    if (field === 'title'){
+      arr.sort((a,b) => (a.task.title||'').localeCompare(b.task.title||'', 'ko'));
+    } else { // date
+      arr.sort((a,b) => {
+        const da = new Date(a.y, a.m, a.task.start);
+        const db = new Date(b.y, b.m, b.task.start);
+        return da - db || (a.task.title||'').localeCompare(b.task.title||'', 'ko');
+      });
+    }
+    if (dir === 'desc') arr.reverse();
     return arr;
   }
   let fileHandle = null;
@@ -1092,7 +1123,8 @@
   function renderThisWeek(){
     const list = document.getElementById('tw-list');
     const {start, end, label} = getTwRange();
-    const results = getTasksOverlappingRange(start, end);
+    const rawResults = getTasksOverlappingRange(start, end);
+    const results = sortResults(rawResults, twSortField, twSortDir);
 
     // Update labels / button text that depend on selected week
     document.getElementById('tw-badge').textContent = `${label} 업무`;
@@ -1223,7 +1255,7 @@
 
     const y = currentYear;
     const m = currentMonth;
-    const sorted = sortTasks(data.tasks);
+    const sorted = sortTasks(data.tasks, allSortField, allSortDir);
 
     sorted.forEach(task => {
       const item = document.createElement('div');
@@ -2626,28 +2658,42 @@
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('add-log-btn').addEventListener('click', addTaskLog);
   document.getElementById('all-collapse-btn').addEventListener('click', () => toggleAllSection());
-  (function initAllSortSelects(){
-    const fieldSel = document.getElementById('all-sort-field');
-    const dirSel = document.getElementById('all-sort-dir');
+  function bindSortSelects({ fieldId, dirId, fieldKey, dirKey, getField, getDir, setField, setDir, onChange }){
+    const fieldSel = document.getElementById(fieldId);
+    const dirSel = document.getElementById(dirId);
     if (fieldSel){
-      fieldSel.value = allSortField;
+      fieldSel.value = getField();
       fieldSel.addEventListener('change', e => {
-        allSortField = e.target.value;
-        try { localStorage.setItem(ALL_SORT_FIELD_KEY, allSortField); } catch(_){}
-        renderAllTasks();
+        setField(e.target.value);
+        try { localStorage.setItem(fieldKey, getField()); } catch(_){}
+        onChange();
       });
     }
     if (dirSel){
-      dirSel.value = allSortDir;
+      dirSel.value = getDir();
       dirSel.addEventListener('change', e => {
-        allSortDir = e.target.value;
-        try { localStorage.setItem(ALL_SORT_DIR_KEY, allSortDir); } catch(_){}
-        renderAllTasks();
+        setDir(e.target.value);
+        try { localStorage.setItem(dirKey, getDir()); } catch(_){}
+        onChange();
       });
     }
-    // 레거시 키 정리 (기존 단일 드롭다운 값이 로컬에 남아있다면 제거)
-    try { localStorage.removeItem('kar_all_sort_v1'); } catch(_){}
-  })();
+  }
+  bindSortSelects({
+    fieldId: 'all-sort-field', dirId: 'all-sort-dir',
+    fieldKey: ALL_SORT_FIELD_KEY, dirKey: ALL_SORT_DIR_KEY,
+    getField: () => allSortField, getDir: () => allSortDir,
+    setField: v => { allSortField = v; }, setDir: v => { allSortDir = v; },
+    onChange: () => renderAllTasks()
+  });
+  bindSortSelects({
+    fieldId: 'tw-sort-field', dirId: 'tw-sort-dir',
+    fieldKey: TW_SORT_FIELD_KEY, dirKey: TW_SORT_DIR_KEY,
+    getField: () => twSortField, getDir: () => twSortDir,
+    setField: v => { twSortField = v; }, setDir: v => { twSortDir = v; },
+    onChange: () => renderThisWeek()
+  });
+  // 레거시 키 정리 (기존 단일 드롭다운 값이 로컬에 남아있다면 제거)
+  try { localStorage.removeItem('kar_all_sort_v1'); } catch(_){}
   document.getElementById('tw-collapse-btn').addEventListener('click', () => setTwCollapsed(!twCollapsed));
   function setTwCollapsed(collapsed){
     twCollapsed = collapsed;
