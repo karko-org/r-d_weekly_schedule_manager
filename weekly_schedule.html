@@ -566,6 +566,7 @@
   const WEEKDAYS_KR = ['일','월','화','수','목','금','토'];
   const STORAGE_KEY = 'kar_monthly_schedule_v1';
   const FILE_HANDLE_KEY = 'kar_excel_file_handle_v1';
+  const LAST_FILE_HANDLE_KEY = 'kar_last_excel_file_handle_v1'; // 초기화해도 유지되는 '마지막 위치' 힌트
   const ANNUAL_STORAGE_KEY = 'kar_annual_schedule_v1';
   const VIEW_KEY = 'kar_current_view_v1'; // 'monthly' | 'annual'
   const ANNUAL_YEAR_KEY = 'kar_current_annual_year_v1';
@@ -612,6 +613,7 @@
   let focusedTaskId = null;
   let allSectionOpen = false;
   let fileHandle = null;
+  let lastFileHandle = null; // 초기화되어도 유지되는 '마지막 연결 파일' — 파일 선택창 startIn 힌트용
   let isDirty = false;
   let annualData = loadAnnualAll();
   let currentView = loadCurrentView();
@@ -738,7 +740,12 @@
       const stored = await window.idbKeyval.get(FILE_HANDLE_KEY);
       if (stored) {
         fileHandle = stored;
+        lastFileHandle = stored;
         renderFileStatus();
+      } else {
+        // 현재 연결은 없더라도 마지막 사용 파일 힌트는 복원해두기
+        const last = await window.idbKeyval.get(LAST_FILE_HANDLE_KEY);
+        if (last) lastFileHandle = last;
       }
     } catch(e){ console.warn('Could not restore file handle:', e); }
   }
@@ -757,8 +764,9 @@
         }],
         multiple: false
       };
-      // 이전에 연결한 파일이 있으면 그 파일이 있는 폴더에서 열기
+      // 이전에 연결한 파일(또는 마지막으로 선택한 파일)이 있으면 그 폴더에서 열기
       if (fileHandle) opts.startIn = fileHandle;
+      else if (lastFileHandle) opts.startIn = lastFileHandle;
 
       let handle;
       try {
@@ -840,8 +848,12 @@
 
       // Save handle to IndexedDB for persistence
       fileHandle = handle;
+      lastFileHandle = handle;
       try {
-        if (window.idbKeyval) await window.idbKeyval.set(FILE_HANDLE_KEY, handle);
+        if (window.idbKeyval){
+          await window.idbKeyval.set(FILE_HANDLE_KEY, handle);
+          await window.idbKeyval.set(LAST_FILE_HANDLE_KEY, handle);
+        }
       } catch(e){ console.warn('Could not persist file handle:', e); }
 
       isDirty = false;
@@ -966,10 +978,14 @@
           types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }}]
         };
         if (fileHandle) saveOpts.startIn = fileHandle;
+        else if (lastFileHandle) saveOpts.startIn = lastFileHandle;
         const handle = await window.showSaveFilePicker(saveOpts);
         const writable = await handle.createWritable();
         await writable.write(buf);
         await writable.close();
+        // 마지막 위치 힌트 업데이트
+        lastFileHandle = handle;
+        try { if (window.idbKeyval) await window.idbKeyval.set(LAST_FILE_HANDLE_KEY, handle); } catch(e){}
         showToast(`✓ 새 파일로 저장됨`, 'success');
       } catch(err){
         if (err.name === 'AbortError') return;
