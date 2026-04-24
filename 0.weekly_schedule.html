@@ -335,12 +335,13 @@
         <span class="tw-badge" id="all-section-badge"></span>
       </div>
       <div class="tw-header-right">
-        <select class="all-sort-select" id="all-sort-select" aria-label="정렬 방식">
-          <option value="default">기본</option>
-          <option value="title-asc">제목 ↑ (ㄱ→ㅎ)</option>
-          <option value="title-desc">제목 ↓ (ㅎ→ㄱ)</option>
-          <option value="start-asc">시작일 ↑ (빠른 순)</option>
-          <option value="start-desc">시작일 ↓ (늦은 순)</option>
+        <select class="all-sort-select" id="all-sort-field" aria-label="정렬 기준">
+          <option value="date">날짜순</option>
+          <option value="title">제목순</option>
+        </select>
+        <select class="all-sort-select" id="all-sort-dir" aria-label="정렬 방향">
+          <option value="desc">내림차순</option>
+          <option value="asc">오름차순</option>
         </select>
         <span class="task-count" id="all-count"></span>
         <button class="tw-collapse-btn" id="all-collapse-btn" aria-expanded="false" aria-label="접기/펼치기">
@@ -484,7 +485,8 @@
   const ANNUAL_STORAGE_KEY = 'kar_annual_schedule_v1';
   const VIEW_KEY = 'kar_current_view_v1'; // 'monthly' | 'annual'
   const ANNUAL_YEAR_KEY = 'kar_current_annual_year_v1';
-  const ALL_SORT_KEY = 'kar_all_sort_v1'; // 'default' | 'title-asc' | 'title-desc' | 'start-asc' | 'start-desc'
+  const ALL_SORT_FIELD_KEY = 'kar_all_sort_field_v1'; // 'date' | 'title'
+  const ALL_SORT_DIR_KEY = 'kar_all_sort_dir_v1';     // 'asc' | 'desc'
 
   const FS_API_SUPPORTED = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 
@@ -524,25 +526,24 @@
   let monthData = loadAll();
   let focusedTaskId = null;
   let allSectionOpen = false;
-  let allSortMode = (function(){
-    try { return localStorage.getItem(ALL_SORT_KEY) || 'default'; }
-    catch(e){ return 'default'; }
+  let allSortField = (function(){
+    try { const v = localStorage.getItem(ALL_SORT_FIELD_KEY); return (v === 'title') ? 'title' : 'date'; }
+    catch(e){ return 'date'; }
+  })();
+  let allSortDir = (function(){
+    try { const v = localStorage.getItem(ALL_SORT_DIR_KEY); return (v === 'asc') ? 'asc' : 'desc'; }
+    catch(e){ return 'desc'; }
   })();
 
-  function sortTasks(tasks, mode){
+  function sortTasks(tasks){
     const arr = [...tasks];
-    switch (mode){
-      case 'title-asc':
-        return arr.sort((a,b) => (a.title||'').localeCompare(b.title||'', 'ko'));
-      case 'title-desc':
-        return arr.sort((a,b) => (b.title||'').localeCompare(a.title||'', 'ko'));
-      case 'start-asc':
-        return arr.sort((a,b) => a.start - b.start || (a.title||'').localeCompare(b.title||'', 'ko'));
-      case 'start-desc':
-        return arr.sort((a,b) => b.start - a.start || (a.title||'').localeCompare(b.title||'', 'ko'));
-      default:
-        return arr; // 추가 순 원본 유지
+    if (allSortField === 'title'){
+      arr.sort((a,b) => (a.title||'').localeCompare(b.title||'', 'ko'));
+    } else { // date
+      arr.sort((a,b) => a.start - b.start || (a.title||'').localeCompare(b.title||'', 'ko'));
     }
+    if (allSortDir === 'desc') arr.reverse();
+    return arr;
   }
   let fileHandle = null;
   let lastFileHandle = null; // 초기화되어도 유지되는 '마지막 연결 파일' — 파일 선택창 startIn 힌트용
@@ -1242,7 +1243,7 @@
 
     const y = currentYear;
     const m = currentMonth;
-    const sorted = sortTasks(data.tasks, allSortMode);
+    const sorted = sortTasks(data.tasks);
 
     sorted.forEach(task => {
       const item = document.createElement('div');
@@ -2645,15 +2646,27 @@
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('add-log-btn').addEventListener('click', addTaskLog);
   document.getElementById('all-collapse-btn').addEventListener('click', () => toggleAllSection());
-  (function initAllSortSelect(){
-    const sel = document.getElementById('all-sort-select');
-    if (!sel) return;
-    sel.value = allSortMode;
-    sel.addEventListener('change', e => {
-      allSortMode = e.target.value;
-      try { localStorage.setItem(ALL_SORT_KEY, allSortMode); } catch(_){}
-      renderAllTasks();
-    });
+  (function initAllSortSelects(){
+    const fieldSel = document.getElementById('all-sort-field');
+    const dirSel = document.getElementById('all-sort-dir');
+    if (fieldSel){
+      fieldSel.value = allSortField;
+      fieldSel.addEventListener('change', e => {
+        allSortField = e.target.value;
+        try { localStorage.setItem(ALL_SORT_FIELD_KEY, allSortField); } catch(_){}
+        renderAllTasks();
+      });
+    }
+    if (dirSel){
+      dirSel.value = allSortDir;
+      dirSel.addEventListener('change', e => {
+        allSortDir = e.target.value;
+        try { localStorage.setItem(ALL_SORT_DIR_KEY, allSortDir); } catch(_){}
+        renderAllTasks();
+      });
+    }
+    // 레거시 키 정리 (기존 단일 드롭다운 값이 로컬에 남아있다면 제거)
+    try { localStorage.removeItem('kar_all_sort_v1'); } catch(_){}
   })();
   document.getElementById('tw-collapse-btn').addEventListener('click', () => setTwCollapsed(!twCollapsed));
   function setTwCollapsed(collapsed){
