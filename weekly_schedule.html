@@ -868,13 +868,45 @@
   }
 
   async function disconnectFile(){
+    const hasMonthly = Object.values(monthData).some(md => (md.tasks||[]).length > 0);
+    const hasAnnual = Object.values(annualData).some(a => (a.projects||[]).some(p => (p.bars||[]).length > 0));
+    const hasData = hasMonthly || hasAnnual;
+
+    let msg = null;
     if (isDirty && fileHandle){
-      if (!confirm('저장되지 않은 변경사항이 있습니다. 연결을 해제하면 엑셀 파일에 반영되지 않아요.\n\n계속하시겠습니까?')) return;
+      msg = '저장되지 않은 변경사항이 있습니다. 파일 연결을 해제하고 화면의 모든 일정을 초기화하시겠습니까?\n\n(엑셀 파일에 반영되지 않은 데이터는 사라집니다)';
+    } else if (hasData){
+      msg = '파일 연결을 해제하고 화면의 모든 일정을 초기화하시겠습니까?';
     }
+    if (msg && !confirm(msg)) return;
+
+    // 파일 핸들 제거
     fileHandle = null;
     try { if (window.idbKeyval) await window.idbKeyval.del(FILE_HANDLE_KEY); }catch(e){}
+
+    // 데이터 초기화
+    monthData = {};
+    annualData = {};
+    try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
+    try { localStorage.removeItem(ANNUAL_STORAGE_KEY); } catch(e){}
+    try { localStorage.removeItem(ANNUAL_YEAR_KEY); } catch(e){}
+
+    // 뷰 상태 리셋
+    focusedTaskId = null;
+    focusedBarId = null;
+    currentYear = todayY;
+    currentMonth = todayM;
+    currentAnnualYear = new Date().getFullYear();
+    isDirty = false;
+
+    // 재렌더
     renderFileStatus();
-    showToast('파일 연결 해제됨');
+    renderMonthHeader();
+    renderCalendar();
+    renderThisWeek();
+    if (allSectionOpen) renderAllTasks();
+    if (currentView === 'annual') renderAnnual();
+    showToast('✓ 초기화되었습니다', 'success');
   }
 
   async function ensurePermission(handle, mode='readwrite'){
@@ -980,7 +1012,7 @@
         <span class="file-status-icon">●</span>
         <span class="file-status-text">${isDirty ? '변경됨' : '동기화됨'}</span>
         <span class="file-status-name" title="${escapeAttr(name)}">${escapeHtml(name)}</span>
-        <button class="disconnect-btn" id="disconnect-btn" title="연결 해제">✕</button>
+        <button class="disconnect-btn" id="disconnect-btn" title="연결 해제 및 초기화">✕</button>
       `;
       document.getElementById('disconnect-btn').addEventListener('click', (e) => { e.stopPropagation(); disconnectFile(); });
       saveBtn.disabled = !isDirty;
