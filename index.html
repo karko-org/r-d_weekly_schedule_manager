@@ -148,19 +148,8 @@
   .all-section-month{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:500}
   .all-content{background:var(--surface);border:1px solid var(--line);border-top:none;border-radius:0 0 12px 12px;padding:16px 22px 18px}
   .task-list{display:flex;flex-direction:column;gap:6px}
-  .task-row{display:grid;grid-template-columns:1fr 80px 80px 28px;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid transparent;transition:all .12s}
-  .task-row:focus-within{border-color:var(--accent);background:var(--accent-soft)}
-  .task-row.is-focused{border-color:var(--accent);background:var(--accent-soft)}
-  .task-row.is-invalid{border-color:var(--today)}
-  .task-title-input{font-size:14px;padding:8px 10px;border:1px solid transparent;background:var(--surface);border-radius:6px;font-weight:500}
-  .task-title-input:focus{outline:none;border-color:var(--line)}
-  .task-day-input{font-family:var(--mono);font-size:13px;padding:8px;border:1px solid var(--line);background:var(--surface);border-radius:6px;text-align:center;font-feature-settings:"tnum"}
-  .task-day-input:focus{outline:none;border-color:var(--accent)}
-  .task-empty{text-align:center;padding:24px;color:var(--muted);font-size:13px;font-style:italic}
   .add-task-btn{margin-top:10px;padding:11px;font-size:13px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;transition:all .15s;width:100%}
   .add-task-btn:hover{color:var(--accent);border-color:var(--accent);border-style:solid;background:var(--accent-soft)}
-  .task-list-header{display:grid;grid-template-columns:1fr 80px 80px 28px;gap:10px;padding:0 12px 6px;font-size:11px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
-  .task-list-header span:nth-child(2),.task-list-header span:nth-child(3){text-align:center}
 
   .actions{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0;margin-bottom:20px;border-bottom:1px solid var(--line-soft)}
   .actions-left{flex:1;display:flex;gap:10px;flex-wrap:wrap}
@@ -406,12 +395,6 @@
       <span class="task-count" id="all-count"></span>
     </button>
     <div class="all-content" id="all-content" hidden>
-      <div class="task-list-header">
-        <span>업무 내용</span>
-        <span>시작일</span>
-        <span>종료일</span>
-        <span></span>
-      </div>
       <div class="task-list" id="task-list"></div>
       <button class="add-task-btn" id="add-task-btn">+ 업무 추가</button>
     </div>
@@ -1187,7 +1170,7 @@
       titleEl.addEventListener('input', e => {
         task.title = e.target.value; saveAllLocal(); renderCalendar();
         if (allSectionOpen && y === currentYear && m === currentMonth){
-          const twin = document.querySelector(`.task-row[data-id="${task.id}"] .task-title-input`);
+          const twin = document.querySelector(`.all-section .tw-item[data-id="${task.id}"] .tw-title-input`);
           if (twin && document.activeElement !== twin) twin.value = task.title;
         }
       });
@@ -1263,66 +1246,62 @@
 
     if (data.tasks.length === 0){
       const empty = document.createElement('div');
-      empty.className = 'task-empty';
-      empty.textContent = '이번 달에 등록된 업무가 없습니다. 아래 버튼으로 추가해보세요.';
+      empty.className = 'tw-empty';
+      empty.textContent = '— 이번 달에 등록된 업무가 없습니다. 아래 버튼으로 추가해보세요 —';
       list.appendChild(empty);
       return;
     }
 
-    data.tasks.forEach((t, idx) => {
-      const row = document.createElement('div');
-      row.className = 'task-row';
-      row.dataset.id = t.id;
-      if (t.id === focusedTaskId) row.classList.add('is-focused');
-      if (t.start < 1 || t.start > days || t.end < t.start || t.end > days) row.classList.add('is-invalid');
-      row.innerHTML = `
-        <input class="task-title-input" placeholder="업무 내용" value="${escapeAttr(t.title)}">
-        <input class="task-day-input task-start" type="number" min="1" max="${days}" value="${t.start}">
-        <input class="task-day-input task-end" type="number" min="1" max="${days}" value="${t.end}">
+    const y = currentYear;
+    const m = currentMonth;
+
+    data.tasks.forEach(task => {
+      const item = document.createElement('div');
+      item.className = 'tw-item';
+      item.dataset.id = task.id;
+      const startD = new Date(y, m, task.start);
+      const endD = new Date(y, m, task.end);
+      const sameDay = task.start === task.end;
+      const dateStr = sameDay
+        ? `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]})`
+        : `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]}) - ${endD.getMonth()+1}/${endD.getDate()}(${WEEKDAYS_KR[endD.getDay()]})`;
+      item.innerHTML = `
+        <input class="tw-title-input" placeholder="업무 내용" value="${escapeAttr(task.title)}">
+        <div class="tw-dates-cell">
+          <div class="tw-dates">${dateStr}</div>
+        </div>
+        <button class="tw-edit" aria-label="수정" title="수정">✎</button>
         <button class="task-remove" aria-label="삭제">×</button>
       `;
-      const titleEl = row.querySelector('.task-title-input');
-      const startEl = row.querySelector('.task-start');
-      const endEl = row.querySelector('.task-end');
+      const titleEl = item.querySelector('.tw-title-input');
+      const editBtn = item.querySelector('.tw-edit');
+
       titleEl.addEventListener('input', e => {
-        t.title = e.target.value; saveAllLocal(); renderCalendar();
-        const {start, end} = getTwRange();
-        if (taskOverlapsRange(t, currentYear, currentMonth, start, end)){
-          const twin = document.querySelector(`.tw-item[data-id="${t.id}"] .tw-title-input`);
-          if (twin && document.activeElement !== twin) twin.value = t.title;
+        task.title = e.target.value;
+        saveAllLocal();
+        renderCalendar();
+        // 같은 업무가 이번주/다음주 섹션에도 있으면 입력 동기화 (포커스 안 뺏김)
+        const {start: twStart, end: twEnd} = getTwRange();
+        if (taskOverlapsRange(task, y, m, twStart, twEnd)){
+          const twin = document.querySelector(`.tw-section .tw-item[data-id="${task.id}"] .tw-title-input`);
+          if (twin && document.activeElement !== twin) twin.value = task.title;
         }
       });
-      const onDayChange = () => {
-        let s = parseInt(startEl.value,10);
-        let e = parseInt(endEl.value,10);
-        if (!Number.isFinite(s)) s = 1;
-        if (!Number.isFinite(e)) e = s;
-        s = Math.max(1, Math.min(days, s));
-        e = Math.max(s, Math.min(days, e));
-        t.start = s; t.end = e;
-        startEl.value = s; endEl.value = e;
-        saveAllLocal();
-        renderCalendar(); renderThisWeek();
-        row.classList.remove('is-invalid');
-      };
-      startEl.addEventListener('change', onDayChange);
-      endEl.addEventListener('change', onDayChange);
-      [titleEl,startEl,endEl].forEach(el => {
-        el.addEventListener('focus', () => { focusedTaskId = t.id; renderCalendar(); highlightFocusedRow(t.id); });
-      });
-      row.querySelector('.task-remove').addEventListener('click', () => {
-        data.tasks.splice(idx,1);
-        editingTwIds.delete(t.id);
-        if (focusedTaskId === t.id) focusedTaskId = null;
-        saveAllLocal(); renderCalendar(); renderThisWeek(); renderAllTasks();
-      });
-      list.appendChild(row);
-    });
-  }
 
-  function highlightFocusedRow(id){
-    document.querySelectorAll('.task-row').forEach(r => {
-      r.classList.toggle('is-focused', r.dataset.id === id);
+      editBtn.addEventListener('click', () => {
+        focusedTaskId = task.id;
+        openTaskModal(task, y, m);
+      });
+
+      item.querySelector('.task-remove').addEventListener('click', () => {
+        const idx = data.tasks.findIndex(x => x.id === task.id);
+        if (idx >= 0) data.tasks.splice(idx, 1);
+        editingTwIds.delete(task.id);
+        if (focusedTaskId === task.id) focusedTaskId = null;
+        saveAllLocal();
+        renderCalendar(); renderThisWeek(); renderAllTasks();
+      });
+      list.appendChild(item);
     });
   }
 
@@ -1337,25 +1316,18 @@
   }
 
   function addTaskToCurrentMonth(){
-    const data = getMonth(currentYear, currentMonth);
-    const days = daysInMonth(currentYear, currentMonth);
+    const y = currentYear;
+    const m = currentMonth;
+    const days = daysInMonth(y, m);
     let start = 1, end = 1;
-    if (currentYear === thisMon.getFullYear() && currentMonth === thisMon.getMonth()){
+    if (y === thisMon.getFullYear() && m === thisMon.getMonth()){
       start = thisMon.getDate();
-      end = (thisFri.getMonth() === currentMonth) ? thisFri.getDate() : days;
-    } else if (currentYear === todayY && currentMonth === todayM){
+      end = (thisFri.getMonth() === m) ? thisFri.getDate() : days;
+    } else if (y === todayY && m === todayM){
       start = todayD; end = todayD;
     }
-    const t = { id: uid(), title: '', start, end };
-    data.tasks.push(t);
-    focusedTaskId = t.id;
-    saveAllLocal();
-    if (!allSectionOpen) toggleAllSection(true);
-    renderCalendar(); renderThisWeek(); renderAllTasks();
-    setTimeout(() => {
-      const el = document.querySelector(`.task-row[data-id="${t.id}"] .task-title-input`);
-      if (el){ el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'}); }
-    },50);
+    const placeholder = { id: uid(), title: '', start, end, notes: '', color: null };
+    openTaskModal(placeholder, y, m, true, 'all');
   }
 
   function addThisWeekTask(){
@@ -1365,9 +1337,8 @@
     const days = daysInMonth(y, m);
     const startDay = weekStart.getDate();
     const endDay = (weekEnd.getMonth() === m) ? weekEnd.getDate() : days;
-    // 빈 placeholder task로 모달 열기. 저장 눌러야 실제 추가됨.
     const placeholder = { id: uid(), title: '', start: startDay, end: endDay, notes: '', color: null };
-    openTaskModal(placeholder, y, m, true);
+    openTaskModal(placeholder, y, m, true, 'tw');
   }
 
   // ---------- MCE-aware style extraction ----------
@@ -2174,8 +2145,8 @@
   // ---------- Task Detail Modal ----------
   let modalCtx = null; // { task, y, m }
 
-  function openTaskModal(task, y, m, isNew){
-    modalCtx = { task, y, m, isNew: !!isNew };
+  function openTaskModal(task, y, m, isNew, origin){
+    modalCtx = { task, y, m, isNew: !!isNew, origin: origin || null };
     const days = daysInMonth(y, m);
     const titleInput = document.getElementById('modal-title-input');
     const startInput = document.getElementById('modal-start-input');
@@ -2276,7 +2247,12 @@
       const data = getMonth(y, m);
       data.tasks.push(task);
       focusedTaskId = task.id;
-      if (twCollapsed) setTwCollapsed(false); // 추가 시 자동으로 펼침
+      const origin = modalCtx && modalCtx.origin;
+      if (origin === 'all'){
+        if (!allSectionOpen) toggleAllSection(true);
+      } else {
+        if (twCollapsed) setTwCollapsed(false);
+      }
     }
     syncModalChanges();
     closeTaskModal();
