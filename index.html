@@ -69,10 +69,6 @@
   .reset-btn:hover{background:var(--accent);color:var(--surface)}
   .this-week-chip{font-family:var(--mono);font-size:11px;color:var(--bar-accent-ink);background:var(--this-week);padding:6px 12px;border-radius:6px;border:1px solid var(--this-week-border)}
 
-  .writer-info{display:flex;gap:12px;margin-bottom:20px}
-  .writer-info input{flex:1;padding:12px 16px;font-size:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);transition:border-color .15s}
-  .writer-info input:focus{outline:none;border-color:var(--ink)}
-
   .calendar-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px;overflow-x:auto}
   .calendar{display:grid;gap:0;min-width:800px}
   .cal-corner{grid-column:1;grid-row:1 / span 2;background:var(--bg);border:1px solid var(--line-soft);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);text-align:center;padding:6px;line-height:1.3;white-space:pre}
@@ -376,11 +372,6 @@
     <span class="this-week-chip" id="this-week-chip"></span>
   </section>
 
-  <section class="writer-info">
-    <input type="text" id="writer-name" placeholder="이름" aria-label="이름">
-    <input type="text" id="writer-dept" placeholder="부서" aria-label="부서">
-  </section>
-
   <section class="calendar-wrap">
     <div class="calendar" id="calendar"></div>
   </section>
@@ -588,7 +579,6 @@
 (() => {
   const WEEKDAYS_KR = ['일','월','화','수','목','금','토'];
   const STORAGE_KEY = 'kar_monthly_schedule_v1';
-  const WRITER_KEY = 'kar_weekly_writer_v1';
   const FILE_HANDLE_KEY = 'kar_excel_file_handle_v1';
   const ANNUAL_STORAGE_KEY = 'kar_annual_schedule_v1';
   const VIEW_KEY = 'kar_current_view_v1'; // 'monthly' | 'annual'
@@ -706,20 +696,6 @@
     if (!monthData[key]) monthData[key] = { tasks: [] };
     return monthData[key];
   }
-  function loadWriter(){
-    try{ return JSON.parse(localStorage.getItem(WRITER_KEY) || '{}'); }
-    catch(e){ return {}; }
-  }
-  function saveWriter(){
-    const writer = {
-      name: document.getElementById('writer-name').value,
-      dept: document.getElementById('writer-dept').value
-    };
-    try{ localStorage.setItem(WRITER_KEY, JSON.stringify(writer)); }catch(e){}
-    isDirty = true;
-    updateSaveButtonState();
-  }
-
   function showToast(msg, variant='', duration=2600){
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -962,13 +938,7 @@
       return;
     }
     const buf = buildExcelBuffer();
-    const writerName = document.getElementById('writer-name').value.trim();
-    const writerDept = document.getElementById('writer-dept').value.trim();
-    // 파일명: {부서}_{이름}.xlsx 형식
-    // 공백/슬래시 등 윈도우 파일명에 문제가 되는 문자 제거
-    const sanitize = s => s.replace(/[\\/:*?"<>|]/g, '').trim();
-    const parts = [sanitize(writerDept), sanitize(writerName)].filter(Boolean);
-    const fname = (parts.length > 0 ? parts.join('_') : '업무일정') + '.xlsx';
+    const fname = '업무일정.xlsx';
 
     if (FS_API_SUPPORTED){
       try {
@@ -1818,10 +1788,6 @@
 
   // ---------- Excel Export ----------
   function buildMonthlySheet(){
-    const writer = {
-      name: document.getElementById('writer-name').value.trim(),
-      dept: document.getElementById('writer-dept').value.trim()
-    };
     const MAX_DAYS = 31;
     const monthKeys = Object.keys(monthData).filter(k => (monthData[k].tasks || []).length > 0).sort();
 
@@ -1830,7 +1796,7 @@
     const cellNotesToAdd = [];
     const cellStylesToAdd = [];
 
-    const title = writer.name ? `업무 일정 및 계획 (${writer.dept||''}${writer.dept?' · ':''}${writer.name})` : '업무 일정 및 계획';
+    const title = '업무 일정 및 계획';
     const titleRow = [title];
     for (let i = 0; i < MAX_DAYS; i++) titleRow.push('');
     rows.push(titleRow);
@@ -2045,11 +2011,7 @@
 
   // ---------- Briefing view ----------
   function renderBriefing(){
-    const writer = {
-      name: document.getElementById('writer-name').value.trim(),
-      dept: document.getElementById('writer-dept').value.trim()
-    };
-    document.getElementById('briefing-dept').textContent = [writer.dept, writer.name].filter(Boolean).join(' · ') || '업무 브리핑';
+    document.getElementById('briefing-dept').textContent = '업무 브리핑';
     const {start, end, label} = getBriefingWeekRange();
     document.getElementById('briefing-week-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
     document.getElementById('briefing-month').textContent = `${briefingYear}년 ${briefingMonth+1}월`;
@@ -2871,12 +2833,6 @@
       renderThisWeek();
     });
   });
-
-  const w = loadWriter();
-  document.getElementById('writer-name').value = w.name || '';
-  document.getElementById('writer-dept').value = w.dept || '기술연구소';
-  document.getElementById('writer-name').addEventListener('input', saveWriter);
-  document.getElementById('writer-dept').addEventListener('input', saveWriter);
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
