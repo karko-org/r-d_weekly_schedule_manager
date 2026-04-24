@@ -86,10 +86,10 @@
   .cal-bg.is-highlight{background:var(--this-week)}
   .cal-task-bar{display:flex;align-items:center;padding:4px 8px;font-size:12px;font-weight:500;background:#ffffff;color:var(--ink);border-radius:6px;margin:3px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:30px;border:1px solid var(--line);transition:all .15s;cursor:pointer;z-index:1}
   .cal-task-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink);z-index:2}
-  .cal-task-bar.is-focused{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(139,69,19,.3)}
+  .cal-task-bar.is-focused{box-shadow:0 0 0 2px var(--accent)}
   /* 원본 엑셀 색상이 있는 월간 바는 호버 시에도 색상 유지 */
   .cal-task-bar.has-custom-color:hover{filter:brightness(0.92);box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:2}
-  .cal-task-bar.has-custom-color.is-focused{filter:brightness(0.85);box-shadow:0 0 0 2px var(--accent),0 2px 8px rgba(139,69,19,.3)}
+  .cal-task-bar.has-custom-color.is-focused{box-shadow:0 0 0 2px var(--accent)}
 
   .tw-section{background:var(--this-week);border:1px solid var(--this-week-border);border-radius:12px;padding:18px 22px;margin-bottom:14px;transition:padding .15s}
   .tw-section.is-collapsed{padding-bottom:14px}
@@ -248,10 +248,10 @@
   .annual-bg.is-month-even{background:#fbf9f3}
   .annual-bar{display:flex;align-items:center;padding:6px 10px;font-size:12.5px;font-weight:500;background:#ffffff;color:var(--ink);border-radius:6px;margin:4px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:32px;border:1px solid var(--line);transition:all .15s;cursor:pointer;z-index:1}
   .annual-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink);z-index:2}
-  .annual-bar.is-focused{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(139,69,19,.3)}
+  .annual-bar.is-focused{box-shadow:0 0 0 2px var(--accent)}
   /* 원본 엑셀 색상이 있는 바는 호버 시에도 색상 유지 (밝기만 살짝 조정) */
   .annual-bar.has-custom-color:hover{filter:brightness(0.92);box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:2}
-  .annual-bar.has-custom-color.is-focused{filter:brightness(0.85);box-shadow:0 0 0 2px var(--accent),0 2px 8px rgba(139,69,19,.3)}
+  .annual-bar.has-custom-color.is-focused{box-shadow:0 0 0 2px var(--accent)}
   .annual-actions{display:flex;gap:10px}
   .annual-empty{text-align:center;padding:60px 24px;color:var(--muted);font-size:14px;line-height:1.7;background:var(--surface);border:1px dashed var(--line);border-radius:12px}
   .annual-empty strong{color:var(--ink-2)}
