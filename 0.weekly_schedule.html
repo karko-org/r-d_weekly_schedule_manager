@@ -222,8 +222,6 @@
   .color-custom input[type=color]{width:24px;height:24px;padding:0;border:none;background:none;cursor:pointer;border-radius:4px}
   .color-custom input[type=color]::-webkit-color-swatch-wrapper{padding:0}
   .color-custom input[type=color]::-webkit-color-swatch{border:1px solid var(--line);border-radius:4px}
-  .color-clear{font-size:12px;color:var(--muted);padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);transition:all .12s;font-family:inherit}
-  .color-clear:hover{color:var(--today);border-color:var(--today)}
 
   /* Sheet tabs (monthly / annual) */
   .view-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--line);padding:0 4px}
@@ -418,7 +416,6 @@
             <span>커스텀</span>
             <input type="color" id="annual-modal-color-custom" aria-label="커스텀 색상" value="#8b4513">
           </label>
-          <button type="button" class="color-clear" id="annual-modal-color-clear">색 없음</button>
         </div>
       </div>
       <div class="modal-field">
@@ -465,7 +462,6 @@
             <span>커스텀</span>
             <input type="color" id="task-modal-color-custom" aria-label="커스텀 색상" value="#8b4513">
           </label>
-          <button type="button" class="color-clear" id="task-modal-color-clear">색 없음</button>
         </div>
       </div>
       <div class="modal-field">
@@ -2057,9 +2053,6 @@
   document.getElementById('task-modal-color-custom').addEventListener('input', (e) => {
     selectTaskColor(e.target.value);
   });
-  document.getElementById('task-modal-color-clear').addEventListener('click', () => {
-    selectTaskColor('');
-  });
 
   // 인라인 제목 편집 시 같은 그룹(여러 달 업무)의 모든 조각 title 동기화
   function syncTaskTitleInGroup(task, newTitle){
@@ -2394,9 +2387,6 @@
   });
   document.getElementById('annual-modal-color-custom').addEventListener('input', (e) => {
     selectBarColor(e.target.value);
-  });
-  document.getElementById('annual-modal-color-clear').addEventListener('click', () => {
-    selectBarColor('');
   });
 
   document.getElementById('annual-modal-close-btn').addEventListener('click', closeAnnualBarModal);
