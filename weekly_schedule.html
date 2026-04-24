@@ -91,8 +91,6 @@
   /* 원본 엑셀 색상이 있는 월간 바는 호버 시에도 색상 유지 */
   .cal-task-bar.has-custom-color:hover{filter:brightness(0.92);box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:2}
   .cal-task-bar.has-custom-color.is-focused{filter:brightness(0.85);box-shadow:0 0 0 2px var(--accent),0 2px 8px rgba(139,69,19,.3)}
-  /* 브리핑(다크) 모드에서는 밝기를 +로 */
-  .briefing-calendar .cal-task-bar.has-custom-color:hover{filter:brightness(1.1);box-shadow:0 2px 10px rgba(0,0,0,0.3)}
 
   .tw-section{background:var(--this-week);border:1px solid var(--this-week-border);border-radius:12px;padding:18px 22px;margin-bottom:14px;transition:padding .15s}
   .tw-section.is-collapsed{padding-bottom:14px}
@@ -256,64 +254,7 @@
   .annual-empty{text-align:center;padding:60px 24px;color:var(--muted);font-size:14px;line-height:1.7;background:var(--surface);border:1px dashed var(--line);border-radius:12px}
   .annual-empty strong{color:var(--ink-2)}
 
-  /* Briefing view — (이전 .briefing-week-notes 인라인 펼침 스타일 제거됨 — 요일 그룹 카드로 재설계) */
 
-  /* Briefing view */
-  #briefing-view{background:#1a1814;color:#f5f2ea;min-height:100vh;padding:36px 40px;font-family:'Pretendard',system-ui,sans-serif}
-  .briefing-header{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;padding-bottom:22px;margin-bottom:26px;border-bottom:1px solid #3a3631;gap:20px}
-  .briefing-left{display:flex;flex-direction:column;gap:5px}
-  .briefing-dept{font-size:13px;letter-spacing:0.14em;color:#a8a296;text-transform:uppercase;font-family:var(--mono)}
-  .briefing-title{font-size:30px;font-weight:700;letter-spacing:-0.02em;line-height:1}
-  .briefing-center{text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
-  .week-toggle{display:inline-flex;background:#2a2621;border:1px solid #3a3631;border-radius:10px;padding:3px}
-  .week-toggle-btn{padding:9px 18px;font-size:14px;color:#a8a296;border-radius:7px;font-weight:700;transition:all .15s;letter-spacing:-0.01em}
-  .week-toggle-btn:hover{color:#f5f2ea}
-  .week-toggle-btn.is-active{background:#d4a44c;color:#1a1814}
-  .week-toggle-btn.is-active:hover{color:#1a1814}
-  .briefing-center-value{font-family:var(--mono);font-size:18px;font-weight:600;color:#d4a44c;letter-spacing:-0.01em;font-feature-settings:"tnum"}
-  .briefing-right{display:flex;justify-content:flex-end;align-items:end;gap:10px;flex-wrap:wrap}
-  .briefing-nav{display:flex;gap:6px;align-items:center}
-  .briefing-nav .nav-btn{background:transparent;border-color:#3a3631;color:#a8a296}
-  .briefing-nav .nav-btn:hover{color:#f5f2ea;border-color:#f5f2ea}
-  .briefing-month{font-family:var(--mono);font-size:14px;color:#d4a44c;padding:0 10px;font-weight:600}
-  .exit-btn{padding:10px 16px;font-size:13px;color:#a8a296;border:1px solid #3a3631;border-radius:8px;transition:all .15s}
-  .exit-btn:hover{color:#f5f2ea;border-color:#f5f2ea}
-
-  .briefing-calendar-wrap{overflow-x:auto;padding-bottom:8px}
-  .briefing-calendar{display:grid;gap:0;min-width:1000px}
-  .briefing-calendar .cal-corner{background:#2a2621;border-color:#3a3631;color:#a8a296;font-size:12px}
-  .briefing-calendar .cal-day-num{background:#2a2621;border-color:#3a3631;color:#f5f2ea;font-size:14px;padding:10px 2px}
-  .briefing-calendar .cal-day-num.is-highlight{background:#3a2a0a;color:#d4a44c}
-  .briefing-calendar .cal-day-num.is-today{background:#c0392b;color:#fff}
-  .briefing-calendar .cal-weekday{background:#2a2621;border-color:#3a3631;color:#a8a296;font-size:13px;padding:8px 2px}
-  .briefing-calendar .cal-weekday.is-sat{background:#1e2a3a;color:#8fb3d9}
-  .briefing-calendar .cal-weekday.is-sun{background:#2e1a1a;color:#d96666}
-  .briefing-calendar .cal-weekday.is-highlight{background:#3a2a0a;color:#d4a44c;font-weight:700}
-  .briefing-calendar .cal-weekday.is-today{background:#c0392b;color:#fff;font-weight:700}
-  .briefing-calendar .cal-bg{background:#2a2621;border-color:#3a3631;min-height:48px}
-  .briefing-calendar .cal-bg.is-weekend{background:#26221c}
-  .briefing-calendar .cal-bg.is-sunday{background:#2a1e1c}
-  .briefing-calendar .cal-bg.is-highlight{background:#302a22}
-  .briefing-calendar .cal-task-bar{background:#3a3631;color:#f5f2ea;font-size:14px;font-weight:600;min-height:38px;padding:6px 12px;border-radius:8px;margin:4px 3px;border-color:transparent;cursor:pointer}
-  .briefing-calendar .cal-task-bar.is-highlight-task{background:#d4a44c;color:#1a1814}
-  .briefing-calendar .cal-task-bar:hover{background:#4a4540;color:#fff;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,0.3)}
-  .briefing-calendar .cal-task-bar.is-highlight-task:hover{background:#e0b868;color:#1a1814}
-
-  .briefing-week-panel{margin-top:28px;background:#302a22;border:1px solid #d4a44c;border-radius:14px;padding:22px 28px}
-  .briefing-week-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #3a3631;flex-wrap:wrap;gap:10px}
-  .briefing-week-label{font-size:12px;letter-spacing:0.14em;color:#d4a44c;text-transform:uppercase;font-family:var(--mono);font-weight:600}
-  .briefing-week-range{font-family:var(--mono);font-size:16px;color:#f5f2ea;font-weight:500}
-  .briefing-week-list{display:flex;flex-direction:column;gap:6px}
-  .briefing-week-empty{color:#5a564e;font-size:14px;font-style:italic;text-align:center;padding:14px 0}
-  /* Task card */
-  .briefing-task-card{position:relative;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;cursor:pointer;transition:all .12s}
-  .briefing-task-card:hover{background:rgba(212,164,76,0.08)}
-  .briefing-task-title{font-size:16px;font-weight:600;color:#f5f2ea;letter-spacing:-0.01em;margin-bottom:3px;line-height:1.35}
-  .briefing-task-meta{font-size:12.5px;color:#a8a296;display:flex;gap:12px;align-items:baseline;flex-wrap:nowrap;overflow:hidden}
-  .briefing-task-dates{font-family:var(--mono);color:#d4a44c;font-weight:500;flex-shrink:0;font-feature-settings:"tnum"}
-  .briefing-task-notes{color:#a8a296;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;flex:1}
-
-  body.briefing-active #input-view{display:none}
 </style>
 </head>
 <body>
@@ -339,7 +280,6 @@
     </div>
     <button class="btn-secondary" id="btn-connect">📂 엑셀 파일 연결</button>
     <button class="btn-save" id="btn-save" disabled>💾 저장</button>
-    <button class="btn-primary" id="btn-briefing">브리핑 모드 →</button>
   </div>
   <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
 
@@ -367,6 +307,7 @@
     <div class="tw-header">
       <div class="tw-title-group">
         <div class="tw-week-toggle" role="tablist">
+          <button class="tw-week-toggle-btn" data-tw-week="last" role="tab">지난주</button>
           <button class="tw-week-toggle-btn is-active" data-tw-week="this" role="tab">이번주</button>
           <button class="tw-week-toggle-btn" data-tw-week="next" role="tab">다음주</button>
         </div>
@@ -425,42 +366,6 @@
     <strong>이후:</strong> <kbd>💾 저장</kbd> 또는 <kbd>Ctrl+S</kbd> 누르면 연결된 파일에 조용히 덮어쓰기됩니다<br>
     <span style="color:var(--muted);font-size:11px">※ 파일 연결 창은 자동으로 이전에 선택한 엑셀 파일이 있던 폴더에서 열립니다</span>
   </p>
-</main>
-
-<main id="briefing-view" hidden>
-  <header class="briefing-header">
-    <div class="briefing-left">
-      <div class="briefing-dept" id="briefing-dept"></div>
-      <div class="briefing-title">업무 일정 및 계획</div>
-    </div>
-    <div class="briefing-center">
-      <div class="week-toggle" role="tablist">
-        <button class="week-toggle-btn" data-week="last" role="tab">지난주</button>
-        <button class="week-toggle-btn is-active" data-week="this" role="tab">이번주</button>
-      </div>
-      <div class="briefing-center-value" id="briefing-week-range"></div>
-    </div>
-    <div class="briefing-right">
-      <div class="briefing-nav">
-        <button class="nav-btn" id="b-prev-month" aria-label="이전 달">◀</button>
-        <span class="briefing-month" id="briefing-month"></span>
-        <button class="nav-btn" id="b-next-month" aria-label="다음 달">▶</button>
-      </div>
-      <button class="exit-btn" id="btn-exit">← 편집</button>
-    </div>
-  </header>
-
-  <div class="briefing-calendar-wrap">
-    <div class="briefing-calendar" id="briefing-calendar"></div>
-  </div>
-
-  <section class="briefing-week-panel">
-    <div class="briefing-week-header">
-      <span class="briefing-week-label" id="briefing-week-label">이번주 업무</span>
-      <span class="briefing-week-range" id="briefing-week-range-full"></span>
-    </div>
-    <div class="briefing-week-list" id="briefing-week-list"></div>
-  </section>
 </main>
 
 <!-- Annual Bar Detail Modal -->
@@ -603,10 +508,7 @@
 
   let currentYear = todayY;
   let currentMonth = todayM;
-  let briefingYear = thisMon.getFullYear();
-  let briefingMonth = thisMon.getMonth();
-  let briefingWeek = 'this';
-  let twSelectedWeek = 'this'; // 'this' | 'next' — 입력 뷰의 주간 섹션
+  let twSelectedWeek = 'this'; // 'last' | 'this' | 'next' — 주간 섹션 토글
   let twCollapsed = true; // 이번주/다음주 섹션 접힘 상태 — 기본 접힘
   const editingTwIds = new Set();
   let monthData = loadAll();
@@ -714,15 +616,10 @@
     const taskEnd = new Date(y, m, t.end);
     return taskEnd >= startDate && taskStart <= endDate;
   }
-  function getBriefingWeekRange(){
-    return briefingWeek === 'last'
-      ? { start: lastMon, end: lastFri, label: '지난주' }
-      : { start: thisMon, end: thisFri, label: '이번주' };
-  }
   function getTwRange(){
-    return twSelectedWeek === 'next'
-      ? { start: nextMon, end: nextFri, label: '다음주' }
-      : { start: thisMon, end: thisFri, label: '이번주' };
+    if (twSelectedWeek === 'last') return { start: lastMon, end: lastFri, label: '지난주' };
+    if (twSelectedWeek === 'next') return { start: nextMon, end: nextFri, label: '다음주' };
+    return { start: thisMon, end: thisFri, label: '이번주' };
   }
   function isTodayDay(y,m,d){ return y===todayY && m===todayM && d===todayD; }
 
@@ -2026,167 +1923,6 @@
     return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   }
 
-  // ---------- Briefing view ----------
-  function renderBriefing(){
-    document.getElementById('briefing-dept').textContent = '업무 브리핑';
-    const {start, end, label} = getBriefingWeekRange();
-    document.getElementById('briefing-week-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
-    document.getElementById('briefing-month').textContent = `${briefingYear}년 ${briefingMonth+1}월`;
-    document.getElementById('briefing-week-label').textContent = `${label} 업무`;
-    document.getElementById('briefing-week-range-full').textContent = `${start.getFullYear()}. ${start.getMonth()+1}. ${start.getDate()} (월) — ${end.getFullYear()}. ${end.getMonth()+1}. ${end.getDate()} (금)`;
-    document.querySelectorAll('.week-toggle-btn').forEach(btn => {
-      btn.classList.toggle('is-active', btn.dataset.week === briefingWeek);
-    });
-    renderBriefingCalendar();
-    renderBriefingWeekList();
-  }
-
-  function renderBriefingCalendar(){
-    const grid = document.getElementById('briefing-calendar');
-    const days = daysInMonth(briefingYear, briefingMonth);
-    const { rowCount, ordered } = assignRows(getMonth(briefingYear, briefingMonth).tasks);
-    const {start, end} = getBriefingWeekRange();
-
-    grid.style.gridTemplateColumns = `68px repeat(${days}, minmax(30px, 1fr))`;
-    grid.style.gridTemplateRows = `auto auto repeat(${rowCount}, auto)`;
-    grid.innerHTML = '';
-
-    const corner = document.createElement('div');
-    corner.className = 'cal-corner';
-    corner.textContent = `   일\n달`;
-    grid.appendChild(corner);
-
-    for (let d = 1; d <= days; d++){
-      const el = document.createElement('div');
-      el.className = 'cal-day-num';
-      if (isTodayDay(briefingYear,briefingMonth,d)) el.classList.add('is-today');
-      else if (isInRange(briefingYear,briefingMonth,d,start,end)) el.classList.add('is-highlight');
-      el.textContent = d;
-      el.style.gridRow = '1';
-      el.style.gridColumn = String(d+1);
-      grid.appendChild(el);
-    }
-
-    const monthLabel = document.createElement('div');
-    monthLabel.className = 'cal-corner';
-    monthLabel.style.gridColumn = '1';
-    monthLabel.style.gridRow = `2 / span ${1 + rowCount}`;
-    monthLabel.style.fontSize = '18px';
-    monthLabel.style.fontWeight = '700';
-    monthLabel.style.color = '#f5f2ea';
-    monthLabel.textContent = `${briefingMonth+1}월`;
-    grid.appendChild(monthLabel);
-
-    for (let d = 1; d <= days; d++){
-      const wd = weekdayOf(briefingYear,briefingMonth,d);
-      const el = document.createElement('div');
-      el.className = 'cal-weekday';
-      if (wd === 0) el.classList.add('is-sun');
-      if (wd === 6) el.classList.add('is-sat');
-      if (isTodayDay(briefingYear,briefingMonth,d)) el.classList.add('is-today');
-      else if (isInRange(briefingYear,briefingMonth,d,start,end)) el.classList.add('is-highlight');
-      el.textContent = WEEKDAYS_KR[wd];
-      el.style.gridRow = '2';
-      el.style.gridColumn = String(d+1);
-      grid.appendChild(el);
-    }
-
-    for (let r = 0; r < rowCount; r++){
-      for (let d = 1; d <= days; d++){
-        const bg = document.createElement('div');
-        bg.className = 'cal-bg';
-        const wd = weekdayOf(briefingYear,briefingMonth,d);
-        if (wd === 0) bg.classList.add('is-sunday');
-        else if (wd === 6) bg.classList.add('is-weekend');
-        if (isInRange(briefingYear,briefingMonth,d,start,end)) bg.classList.add('is-highlight');
-        bg.style.gridRow = String(3 + r);
-        bg.style.gridColumn = String(d+1);
-        grid.appendChild(bg);
-      }
-    }
-
-    ordered.forEach(t => {
-      const bar = document.createElement('div');
-      bar.className = 'cal-task-bar';
-      if (taskOverlapsRange(t, briefingYear, briefingMonth, start, end)) bar.classList.add('is-highlight-task');
-      if (t.color){
-        bar.classList.add('has-custom-color');
-        bar.style.background = '#' + t.color;
-        const textColor = contrastTextColor(t.color);
-        if (textColor) bar.style.color = textColor;
-      }
-      bar.textContent = t.title || '(제목 없음)';
-      bar.title = `${t.title || '(제목 없음)'}${t.notes ? '\n\n' + t.notes : ''}\n(클릭해서 상세 보기)`;
-      bar.style.gridRow = String(3 + t._row);
-      bar.style.gridColumn = `${t.start+1} / ${t.end+2}`;
-      bar.addEventListener('click', () => openTaskModal(t, briefingYear, briefingMonth));
-      grid.appendChild(bar);
-    });
-  }
-
-  function renderBriefingWeekList(){
-    const listEl = document.getElementById('briefing-week-list');
-    listEl.innerHTML = '';
-    const {start, end} = getBriefingWeekRange();
-    // getTasksOverlappingRange는 이미 시작일 오름차순 정렬
-    const results = getTasksOverlappingRange(start, end);
-
-    if (results.length === 0){
-      const empty = document.createElement('div');
-      empty.className = 'briefing-week-empty';
-      empty.textContent = '— 해당 주에 예정된 업무 없음 —';
-      listEl.appendChild(empty);
-      return;
-    }
-
-    results.forEach(({ task: t, y, m }) => {
-      const card = document.createElement('div');
-      card.className = 'briefing-task-card';
-      card.title = '클릭해서 상세 보기';
-
-      const taskStart = new Date(y, m, t.start);
-      const taskEnd = new Date(y, m, t.end);
-      const effStart = taskStart > start ? taskStart : start;
-      const effEnd = taskEnd < end ? taskEnd : end;
-      const sameDay = fmtISO(effStart) === fmtISO(effEnd);
-      const dateStr = sameDay
-        ? `${effStart.getMonth()+1}/${effStart.getDate()}(${WEEKDAYS_KR[effStart.getDay()]})`
-        : `${effStart.getMonth()+1}/${effStart.getDate()}(${WEEKDAYS_KR[effStart.getDay()]}) — ${effEnd.getMonth()+1}/${effEnd.getDate()}(${WEEKDAYS_KR[effEnd.getDay()]})`;
-
-      const notesOneLine = t.notes ? t.notes.replace(/\s+/g, ' ').trim() : '';
-
-      card.innerHTML = `
-        <div class="briefing-task-title">${escapeHtml(t.title) || '(제목 없음)'}</div>
-        <div class="briefing-task-meta">
-          <span class="briefing-task-dates">${dateStr}</span>
-          ${notesOneLine ? `<span class="briefing-task-notes">${escapeHtml(notesOneLine)}</span>` : ''}
-        </div>
-      `;
-      card.addEventListener('click', () => openTaskModal(t, y, m));
-      listEl.appendChild(card);
-    });
-  }
-
-  function setBriefingWeek(week){
-    briefingWeek = week;
-    const {start} = getBriefingWeekRange();
-    briefingYear = start.getFullYear();
-    briefingMonth = start.getMonth();
-    renderBriefing();
-  }
-
-  function enterBriefing(){
-    briefingWeek = 'this';
-    briefingYear = thisMon.getFullYear();
-    briefingMonth = thisMon.getMonth();
-    renderBriefing();
-    document.body.classList.add('briefing-active');
-    document.getElementById('briefing-view').hidden = false;
-  }
-  function exitBriefing(){
-    document.body.classList.remove('briefing-active');
-    document.getElementById('briefing-view').hidden = true;
-  }
 
   // ---------- Task Detail Modal ----------
   let modalCtx = null; // { task, y, m }
@@ -2247,7 +1983,6 @@
     renderCalendar();
     renderThisWeek();
     if (allSectionOpen) renderAllTasks();
-    if (!document.getElementById('briefing-view').hidden) renderBriefing();
   }
   // 날짜 변경 시 DOM 정합성만 유지 (객체 수정 없음).
   // ISO 문자열(YYYY-MM-DD) 기준 — 종료 < 시작이면 종료를 시작과 같게 맞춤.
@@ -2406,7 +2141,6 @@
     renderCalendar();
     renderThisWeek();
     if (allSectionOpen) renderAllTasks();
-    if (!document.getElementById('briefing-view').hidden) renderBriefing();
   });
   // Click outside to close
   document.getElementById('task-modal').addEventListener('click', (e) => {
@@ -2873,13 +2607,6 @@
     renderMonthHeader(); renderCalendar();
     if (allSectionOpen) renderAllTasks();
   }
-  function changeBriefingMonth(delta){
-    const d = new Date(briefingYear, briefingMonth + delta, 1);
-    briefingYear = d.getFullYear();
-    briefingMonth = d.getMonth();
-    renderBriefing();
-  }
-
   document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('add-log-btn').addEventListener('click', addTaskLog);
@@ -2897,8 +2624,6 @@
     if (collapsed) editingTwIds.clear();
   }
 
-  document.getElementById('btn-briefing').addEventListener('click', enterBriefing);
-  document.getElementById('btn-exit').addEventListener('click', exitBriefing);
   document.getElementById('btn-connect').addEventListener('click', connectExcelFile);
   document.getElementById('btn-save').addEventListener('click', saveToConnectedFile);
   document.getElementById('btn-export-new').addEventListener('click', exportAsNewFile);
@@ -2912,11 +2637,6 @@
   document.getElementById('a-next-year').addEventListener('click', () => changeAnnualYear(1));
   document.getElementById('a-reset-year').addEventListener('click', resetAnnualYear);
   document.getElementById('add-annual-row-btn').addEventListener('click', addAnnualProjectRow);
-  document.getElementById('b-prev-month').addEventListener('click', () => changeBriefingMonth(-1));
-  document.getElementById('b-next-month').addEventListener('click', () => changeBriefingMonth(1));
-  document.querySelectorAll('.week-toggle-btn').forEach(btn => {
-    btn.addEventListener('click', () => setBriefingWeek(btn.dataset.week));
-  });
   document.querySelectorAll('.tw-week-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       twSelectedWeek = btn.dataset.twWeek;
@@ -2947,11 +2667,6 @@
       if (e.key === 'Escape') closeAnnualBarModal();
       return;
     }
-    // Briefing view only
-    if (document.getElementById('briefing-view').hidden) return;
-    if (e.key === 'Escape') exitBriefing();
-    else if (e.key === 'ArrowLeft' && !e.shiftKey) setBriefingWeek('last');
-    else if (e.key === 'ArrowRight' && !e.shiftKey) setBriefingWeek('this');
   });
 
   // Warn before leaving if unsaved
