@@ -241,6 +241,25 @@
   .modal-save-btn{padding:10px 22px;font-size:13px;color:var(--surface);background:var(--success);border:1px solid var(--success);border-radius:8px;font-weight:600;transition:all .15s;font-family:inherit}
   .modal-save-btn:hover{background:#256539;border-color:#256539}
 
+  /* Color picker (annual bar modal) */
+  .color-picker{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .color-swatches{display:inline-flex;gap:6px;flex-wrap:wrap}
+  .color-swatch{width:26px;height:26px;border-radius:6px;border:2px solid transparent;cursor:pointer;transition:all .12s;padding:0;font-family:inherit;position:relative}
+  .color-swatch:hover{transform:scale(1.1);box-shadow:0 2px 6px rgba(0,0,0,.15)}
+  .color-swatch.is-active{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface) inset}
+  .color-swatch.is-none{background:
+    linear-gradient(45deg, transparent 46%, var(--today) 46%, var(--today) 54%, transparent 54%),
+    var(--surface);
+    border:1px dashed var(--line)}
+  .color-swatch.is-none.is-active{border-color:var(--ink);border-style:solid}
+  .color-custom{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);transition:all .12s}
+  .color-custom:hover{border-color:var(--ink-2);color:var(--ink-2)}
+  .color-custom input[type=color]{width:24px;height:24px;padding:0;border:none;background:none;cursor:pointer;border-radius:4px}
+  .color-custom input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+  .color-custom input[type=color]::-webkit-color-swatch{border:1px solid var(--line);border-radius:4px}
+  .color-clear{font-size:12px;color:var(--muted);padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);transition:all .12s;font-family:inherit}
+  .color-clear:hover{color:var(--today);border-color:var(--today)}
+
   /* Sheet tabs (monthly / annual) */
   .view-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--line);padding:0 4px}
   .view-tab{padding:12px 22px;font-size:14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;font-family:inherit;letter-spacing:-0.01em;display:inline-flex;align-items:center;gap:8px}
@@ -516,6 +535,17 @@
           <select class="modal-date-input" id="annual-modal-end-month" style="width:70px" aria-label="종료 월"></select>
           <select class="modal-date-input" id="annual-modal-end-week" style="width:70px" aria-label="종료 주"></select>
           <span class="modal-dates-display" id="annual-modal-dates-display"></span>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">색상</label>
+        <div class="color-picker">
+          <div class="color-swatches" id="annual-modal-swatches" role="radiogroup" aria-label="바 배경색"></div>
+          <label class="color-custom">
+            <span>커스텀</span>
+            <input type="color" id="annual-modal-color-custom" aria-label="커스텀 색상" value="#8b4513">
+          </label>
+          <button type="button" class="color-clear" id="annual-modal-color-clear">색 없음</button>
         </div>
       </div>
       <div class="modal-field">
@@ -2152,6 +2182,58 @@
   // ---------- Annual Bar Modal ----------
   let annualModalCtx = null; // { project, bar, annual }
 
+  // 원본 엑셀에서 자주 쓰는 프리셋 팔레트 (hex, 대문자)
+  const ANNUAL_COLOR_PRESETS = [
+    { hex: 'FAA4B0', label: '연분홍' },
+    { hex: 'FFC000', label: '주황' },
+    { hex: 'F9DB6F', label: '노랑' },
+    { hex: 'FFFF69', label: '밝은 노랑' },
+    { hex: 'C5E0B4', label: '연두' },
+    { hex: 'A9D18E', label: '초록' },
+    { hex: '9DC3E6', label: '연파랑' },
+    { hex: 'B4C7E7', label: '파랑' },
+    { hex: 'C59EE2', label: '연보라' }
+  ];
+
+  function renderColorSwatches(currentColor){
+    const wrap = document.getElementById('annual-modal-swatches');
+    wrap.innerHTML = '';
+    // "색 없음" 스와치 맨 앞
+    const noneBtn = document.createElement('button');
+    noneBtn.type = 'button';
+    noneBtn.className = 'color-swatch is-none' + (!currentColor ? ' is-active' : '');
+    noneBtn.title = '색 없음';
+    noneBtn.dataset.color = '';
+    noneBtn.setAttribute('role', 'radio');
+    noneBtn.setAttribute('aria-checked', String(!currentColor));
+    wrap.appendChild(noneBtn);
+    // 프리셋
+    ANNUAL_COLOR_PRESETS.forEach(p => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'color-swatch' + (currentColor === p.hex ? ' is-active' : '');
+      btn.style.background = '#' + p.hex;
+      btn.title = `${p.label} (#${p.hex})`;
+      btn.dataset.color = p.hex;
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', String(currentColor === p.hex));
+      wrap.appendChild(btn);
+    });
+    // 커스텀 input의 기본값을 현재 색 또는 accent로
+    const customInput = document.getElementById('annual-modal-color-custom');
+    const isPreset = !currentColor || ANNUAL_COLOR_PRESETS.some(p => p.hex === currentColor);
+    customInput.value = '#' + (currentColor && !isPreset ? currentColor : '8B4513');
+  }
+
+  function applyBarColor(colorHex){
+    if (!annualModalCtx) return;
+    const normalized = colorHex ? String(colorHex).replace('#','').toUpperCase() : '';
+    annualModalCtx.bar.color = normalized || null;
+    renderColorSwatches(annualModalCtx.bar.color);
+    saveAnnualLocal();
+    if (currentView === 'annual') renderAnnual();
+  }
+
   function weekToMonthWeek(annual, week){
     for (const mw of annual.monthWeeks){
       if (week >= mw.startCol && week <= mw.endCol){
@@ -2218,6 +2300,7 @@
     ewEl.value = String(eMW.weekInMonth);
 
     notesInput.value = bar.notes || '';
+    renderColorSwatches(bar.color);
     updateAnnualModalDatesDisplay();
     document.getElementById('annual-bar-modal').classList.add('is-open');
     setTimeout(() => titleInput.focus(), 50);
@@ -2289,6 +2372,19 @@
   };
   ['annual-modal-start-month','annual-modal-start-week','annual-modal-end-month','annual-modal-end-week']
     .forEach(id => document.getElementById(id).addEventListener('change', annualModalOnDateChange));
+  // 색상 스와치 클릭 (이벤트 위임 — 스와치는 매번 재렌더)
+  document.getElementById('annual-modal-swatches').addEventListener('click', (e) => {
+    const btn = e.target.closest('.color-swatch');
+    if (!btn) return;
+    applyBarColor(btn.dataset.color || '');
+  });
+  // 커스텀 컬러 피커
+  document.getElementById('annual-modal-color-custom').addEventListener('input', (e) => {
+    applyBarColor(e.target.value);
+  });
+  document.getElementById('annual-modal-color-clear').addEventListener('click', () => {
+    applyBarColor('');
+  });
   document.getElementById('annual-modal-close-btn').addEventListener('click', closeAnnualBarModal);
   document.getElementById('annual-modal-save-btn').addEventListener('click', () => {
     closeAnnualBarModal();
