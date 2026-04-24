@@ -2135,6 +2135,7 @@
     endInput.min = 1; endInput.max = days; endInput.value = task.end;
     notesInput.value = task.notes || '';
     renderColorSwatches('task-modal-swatches', 'task-modal-color-custom', task.color);
+    document.getElementById('task-modal-swatches').dataset.selectedColor = task.color || '';
     updateModalDatesDisplay();
     document.getElementById('task-modal').classList.add('is-open');
     setTimeout(() => titleInput.focus(), 50);
@@ -2159,30 +2160,18 @@
     document.getElementById('modal-dates-display').textContent = display;
   }
 
-  // Modal input wiring
+  // Modal input wiring — 편집은 DOM에만 유지. 저장 버튼 클릭 시에만 객체 반영.
   function syncModalChanges(){
     saveAllLocal();
     renderCalendar();
     renderThisWeek();
     if (allSectionOpen) renderAllTasks();
-    // 브리핑 뷰가 보이는 상태면 그것도 갱신
     if (!document.getElementById('briefing-view').hidden) renderBriefing();
   }
-  document.getElementById('modal-title-input').addEventListener('input', (e) => {
-    if (!modalCtx) return;
-    modalCtx.task.title = e.target.value;
-    syncModalChanges();
-  });
-  document.getElementById('modal-notes-input').addEventListener('input', (e) => {
-    if (!modalCtx) return;
-    modalCtx.task.notes = e.target.value;
-    saveAllLocal();
-    // 브리핑 뷰에서 메모가 바로 보이도록 갱신
-    if (!document.getElementById('briefing-view').hidden) renderBriefing();
-  });
+  // 날짜 변경 시 DOM 정합성만 유지 (객체 수정 없음)
   const modalOnDateChange = () => {
     if (!modalCtx) return;
-    const { task, y, m } = modalCtx;
+    const { y, m } = modalCtx;
     const days = daysInMonth(y, m);
     const startEl = document.getElementById('modal-start-input');
     const endEl = document.getElementById('modal-end-input');
@@ -2192,29 +2181,43 @@
     if (!Number.isFinite(e)) e = s;
     s = Math.max(1, Math.min(days, s));
     e = Math.max(s, Math.min(days, e));
-    task.start = s; task.end = e;
     startEl.value = s; endEl.value = e;
-    syncModalChanges();
     updateModalDatesDisplay();
   };
   document.getElementById('modal-start-input').addEventListener('change', modalOnDateChange);
   document.getElementById('modal-end-input').addEventListener('change', modalOnDateChange);
 
-  // 월간 모달 색상 피커 이벤트
+  // 색상 선택 — DOM 상태만 갱신 (data-selected-color + active 표시)
   document.getElementById('task-modal-swatches').addEventListener('click', (e) => {
     const btn = e.target.closest('.color-swatch');
     if (!btn) return;
-    applyTaskColor(btn.dataset.color || '');
+    selectTaskColor(btn.dataset.color || '');
   });
   document.getElementById('task-modal-color-custom').addEventListener('input', (e) => {
-    applyTaskColor(e.target.value);
+    selectTaskColor(e.target.value);
   });
   document.getElementById('task-modal-color-clear').addEventListener('click', () => {
-    applyTaskColor('');
+    selectTaskColor('');
   });
 
   document.getElementById('modal-close-btn').addEventListener('click', closeTaskModal);
   document.getElementById('modal-save-btn').addEventListener('click', () => {
+    if (!modalCtx) { closeTaskModal(); return; }
+    const { task, y, m } = modalCtx;
+    const days = daysInMonth(y, m);
+    let s = parseInt(document.getElementById('modal-start-input').value, 10);
+    let e = parseInt(document.getElementById('modal-end-input').value, 10);
+    if (!Number.isFinite(s)) s = 1;
+    if (!Number.isFinite(e)) e = s;
+    s = Math.max(1, Math.min(days, s));
+    e = Math.max(s, Math.min(days, e));
+    task.title = document.getElementById('modal-title-input').value;
+    task.start = s;
+    task.end = e;
+    task.notes = document.getElementById('modal-notes-input').value;
+    const color = document.getElementById('task-modal-swatches').dataset.selectedColor || '';
+    task.color = color || null;
+    syncModalChanges();
     closeTaskModal();
     showToast('✓ 저장됨', 'success', 1500);
   });
@@ -2290,21 +2293,22 @@
     }
   }
 
-  function applyBarColor(colorHex){
+  // DOM 전용 — 스와치 상태만 갱신. 저장 버튼 눌러야 bar에 반영.
+  function selectBarColor(colorHex){
     if (!annualModalCtx) return;
     const normalized = colorHex ? String(colorHex).replace('#','').toUpperCase() : '';
-    annualModalCtx.bar.color = normalized || null;
-    renderColorSwatches('annual-modal-swatches', 'annual-modal-color-custom', annualModalCtx.bar.color);
-    saveAnnualLocal();
-    if (currentView === 'annual') renderAnnual();
+    const wrap = document.getElementById('annual-modal-swatches');
+    wrap.dataset.selectedColor = normalized;
+    renderColorSwatches('annual-modal-swatches', 'annual-modal-color-custom', normalized);
   }
 
-  function applyTaskColor(colorHex){
+  // DOM 전용 — 스와치 active 상태만 바꾸고 task 객체는 건드리지 않음
+  function selectTaskColor(colorHex){
     if (!modalCtx) return;
     const normalized = colorHex ? String(colorHex).replace('#','').toUpperCase() : '';
-    modalCtx.task.color = normalized || null;
-    renderColorSwatches('task-modal-swatches', 'task-modal-color-custom', modalCtx.task.color);
-    syncModalChanges();
+    const wrap = document.getElementById('task-modal-swatches');
+    wrap.dataset.selectedColor = normalized;
+    renderColorSwatches('task-modal-swatches', 'task-modal-color-custom', normalized);
   }
 
   function weekToMonthWeek(annual, week){
@@ -2374,6 +2378,7 @@
 
     notesInput.value = bar.notes || '';
     renderColorSwatches('annual-modal-swatches', 'annual-modal-color-custom', bar.color);
+    document.getElementById('annual-modal-swatches').dataset.selectedColor = bar.color || '';
     updateAnnualModalDatesDisplay();
     document.getElementById('annual-bar-modal').classList.add('is-open');
     setTimeout(() => titleInput.focus(), 50);
@@ -2401,20 +2406,10 @@
     if (currentView === 'annual') renderAnnual();
   }
 
-  // Wire annual modal inputs
-  document.getElementById('annual-modal-title-input').addEventListener('input', (e) => {
-    if (!annualModalCtx) return;
-    annualModalCtx.bar.title = e.target.value;
-    syncAnnualModalChanges();
-  });
-  document.getElementById('annual-modal-notes-input').addEventListener('input', (e) => {
-    if (!annualModalCtx) return;
-    annualModalCtx.bar.notes = e.target.value;
-    saveAnnualLocal();
-  });
+  // Annual modal — 편집은 DOM에만 유지. 저장 버튼에서 bar 객체에 일괄 반영.
   const annualModalOnDateChange = () => {
     if (!annualModalCtx) return;
-    const { annual, bar } = annualModalCtx;
+    const { annual } = annualModalCtx;
     const smEl = document.getElementById('annual-modal-start-month');
     const swEl = document.getElementById('annual-modal-start-week');
     const emEl = document.getElementById('annual-modal-end-month');
@@ -2422,44 +2417,57 @@
     // 월 변경 시 해당 월 주 목록 재구성
     populateWeekSelect(swEl, annual, parseInt(smEl.value, 10));
     populateWeekSelect(ewEl, annual, parseInt(emEl.value, 10));
-    // 값이 비어있으면 1로
     if (!swEl.value) swEl.value = '1';
     if (!ewEl.value) ewEl.value = '1';
-    let sWeek = monthWeekToWeek(annual, parseInt(smEl.value,10), parseInt(swEl.value,10));
-    let eWeek = monthWeekToWeek(annual, parseInt(emEl.value,10), parseInt(ewEl.value,10));
-    if (sWeek == null || eWeek == null) return;
-    // 종료 < 시작이면 종료를 시작과 같게 맞춤
-    if (eWeek < sWeek){
-      eWeek = sWeek;
-      const mwEnd = weekToMonthWeek(annual, eWeek);
+    // 종료 < 시작 정합성만 DOM에서 맞춤
+    const sWeek = monthWeekToWeek(annual, parseInt(smEl.value,10), parseInt(swEl.value,10));
+    const eWeek = monthWeekToWeek(annual, parseInt(emEl.value,10), parseInt(ewEl.value,10));
+    if (sWeek != null && eWeek != null && eWeek < sWeek){
+      const mwEnd = weekToMonthWeek(annual, sWeek);
       if (mwEnd){
         emEl.value = String(mwEnd.month);
         populateWeekSelect(ewEl, annual, mwEnd.month);
         ewEl.value = String(mwEnd.weekInMonth);
       }
     }
-    bar.startWeek = sWeek;
-    bar.endWeek = eWeek;
     updateAnnualModalDatesDisplay();
-    syncAnnualModalChanges();
   };
   ['annual-modal-start-month','annual-modal-start-week','annual-modal-end-month','annual-modal-end-week']
     .forEach(id => document.getElementById(id).addEventListener('change', annualModalOnDateChange));
-  // 색상 스와치 클릭 (이벤트 위임 — 스와치는 매번 재렌더)
+
+  // 색상 선택 (DOM 전용)
   document.getElementById('annual-modal-swatches').addEventListener('click', (e) => {
     const btn = e.target.closest('.color-swatch');
     if (!btn) return;
-    applyBarColor(btn.dataset.color || '');
+    selectBarColor(btn.dataset.color || '');
   });
-  // 커스텀 컬러 피커
   document.getElementById('annual-modal-color-custom').addEventListener('input', (e) => {
-    applyBarColor(e.target.value);
+    selectBarColor(e.target.value);
   });
   document.getElementById('annual-modal-color-clear').addEventListener('click', () => {
-    applyBarColor('');
+    selectBarColor('');
   });
+
   document.getElementById('annual-modal-close-btn').addEventListener('click', closeAnnualBarModal);
   document.getElementById('annual-modal-save-btn').addEventListener('click', () => {
+    if (!annualModalCtx) { closeAnnualBarModal(); return; }
+    const { bar, annual } = annualModalCtx;
+    bar.title = document.getElementById('annual-modal-title-input').value;
+    bar.notes = document.getElementById('annual-modal-notes-input').value;
+    const sm = parseInt(document.getElementById('annual-modal-start-month').value, 10);
+    const sw = parseInt(document.getElementById('annual-modal-start-week').value, 10);
+    const em = parseInt(document.getElementById('annual-modal-end-month').value, 10);
+    const ew = parseInt(document.getElementById('annual-modal-end-week').value, 10);
+    let sWeek = monthWeekToWeek(annual, sm, sw);
+    let eWeek = monthWeekToWeek(annual, em, ew);
+    if (sWeek == null) sWeek = bar.startWeek;
+    if (eWeek == null) eWeek = bar.endWeek;
+    if (eWeek < sWeek) eWeek = sWeek;
+    bar.startWeek = sWeek;
+    bar.endWeek = eWeek;
+    const color = document.getElementById('annual-modal-swatches').dataset.selectedColor || '';
+    bar.color = color || null;
+    syncAnnualModalChanges();
     closeAnnualBarModal();
     showToast('✓ 저장됨', 'success', 1500);
   });
