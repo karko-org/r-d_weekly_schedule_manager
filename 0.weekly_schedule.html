@@ -178,7 +178,7 @@
   .modal-overlay.is-open{display:flex;animation:modalFadeIn 0.15s ease-out}
   @keyframes modalFadeIn{from{opacity:0}to{opacity:1}}
   @keyframes modalSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
-  .modal{background:var(--surface);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:600px;max-height:90vh;display:flex;flex-direction:column;animation:modalSlideUp 0.2s ease-out}
+  .modal{background:var(--surface);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;animation:modalSlideUp 0.2s ease-out}
   .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--line-soft)}
   .modal-title{font-size:12px;font-weight:700;color:var(--ink-2);letter-spacing:0.12em;text-transform:uppercase;font-family:var(--mono)}
   .modal-close{width:32px;height:32px;border-radius:8px;color:var(--muted);font-size:20px;line-height:1;transition:all .15s;font-family:inherit}
@@ -195,7 +195,7 @@
   .modal-date-picker::-webkit-calendar-picker-indicator{cursor:pointer;opacity:0.6;filter:invert(30%)}
   .modal-date-picker:hover::-webkit-calendar-picker-indicator{opacity:1}
   .modal-dates-sep{color:var(--muted);font-size:14px}
-  .modal-dates-display{margin-left:auto;font-size:13px;color:var(--muted);font-family:var(--mono);font-feature-settings:"tnum";white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .modal-dates-display{font-size:13px;color:var(--muted);font-family:var(--mono);font-feature-settings:"tnum";white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
   .modal-notes{padding:12px 14px;font-size:14px;line-height:1.6;border:1px solid var(--line);background:var(--bg);border-radius:8px;font-family:inherit;color:var(--ink);min-height:160px;resize:vertical;width:100%}
   .modal-notes:focus{outline:none;border-color:var(--accent);background:var(--surface)}
   .modal-footer{display:flex;justify-content:space-between;padding:14px 24px;border-top:1px solid var(--line-soft);gap:12px;align-items:center}
