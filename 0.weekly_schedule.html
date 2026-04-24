@@ -328,8 +328,7 @@
   <section class="all-section is-collapsed" id="all-section">
     <div class="tw-header">
       <div class="tw-title-group">
-        <span class="tw-badge">이번 달 전체 업무</span>
-        <span class="tw-range" id="all-section-month"></span>
+        <span class="tw-badge" id="all-section-badge"></span>
       </div>
       <div class="tw-header-right">
         <span class="task-count" id="all-count"></span>
@@ -960,7 +959,7 @@
     document.getElementById('month-label').textContent = label;
     const {start, end} = getTwRange();
     document.getElementById('tw-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
-    document.getElementById('all-section-month').textContent = `${currentYear}년 ${currentMonth+1}월`;
+    document.getElementById('all-section-badge').textContent = `${currentYear}년 ${currentMonth+1}월 전체 업무`;
   }
 
   function renderCalendar(){
