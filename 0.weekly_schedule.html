@@ -353,7 +353,6 @@
         <div class="annual-title" id="annual-title"></div>
       </div>
       <button class="nav-btn" id="a-next-year" aria-label="다음 연도">▶</button>
-      <button class="reset-btn" id="a-reset-year">올해</button>
     </div>
     <div id="annual-body"></div>
     <div class="annual-actions">
@@ -806,7 +805,13 @@
     currentYear = todayY;
     currentMonth = todayM;
     currentAnnualYear = new Date().getFullYear();
+    twSelectedWeek = 'this';
     isDirty = false;
+
+    // 주간 토글 버튼 UI 동기화
+    document.querySelectorAll('.tw-week-toggle-btn').forEach(b => {
+      b.classList.toggle('is-active', b.dataset.twWeek === 'this');
+    });
 
     // 재렌더
     renderFileStatus();
@@ -2409,12 +2414,6 @@
     renderAnnual();
   }
 
-  function resetAnnualYear(){
-    currentAnnualYear = new Date().getFullYear();
-    focusedBarId = null;
-    try{ localStorage.setItem(ANNUAL_YEAR_KEY, String(currentAnnualYear)); }catch(e){}
-    renderAnnual();
-  }
 
   function addAnnualProjectRow(){
     const annual = getOrCreateAnnual(currentAnnualYear);
@@ -2635,7 +2634,6 @@
   // Annual year navigation
   document.getElementById('a-prev-year').addEventListener('click', () => changeAnnualYear(-1));
   document.getElementById('a-next-year').addEventListener('click', () => changeAnnualYear(1));
-  document.getElementById('a-reset-year').addEventListener('click', resetAnnualYear);
   document.getElementById('add-annual-row-btn').addEventListener('click', addAnnualProjectRow);
   document.querySelectorAll('.tw-week-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
