@@ -1,0 +1,2597 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAR 업무 일정 캘린더</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
+<style>
+  :root{
+    --bg:#f5f2ea;
+    --surface:#fffdf8;
+    --ink:#1a1814;
+    --ink-2:#3a3631;
+    --muted:#8a8478;
+    --line:#d8d2c4;
+    --line-soft:#ebe6d9;
+    --accent:#8b4513;
+    --accent-soft:#f3e8d8;
+    --accent-mid:#d4a44c;
+    --this-week:#fef4e8;
+    --this-week-border:#d4a44c;
+    --this-week-border-soft:#e8c88a;
+    --today:#c0392b;
+    --weekend:#f0ede3;
+    --sunday:#f5e9e9;
+    --bar-bg:#e8dcc4;
+    --bar-ink:#5c3d1a;
+    --bar-accent-bg:#d4a44c;
+    --bar-accent-ink:#3a2a0a;
+    --success:#2d7a4a;
+    --success-bg:#e6f3eb;
+    --mono:'JetBrains Mono','SF Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{font-family:'Pretendard',system-ui,sans-serif;color:var(--ink);background:var(--bg);font-feature-settings:"ss06","kern";-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input{font-family:inherit;color:inherit}
+
+  #input-view{max-width:1400px;margin:0 auto;padding:28px 32px 60px}
+
+  .app-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid var(--line);margin-bottom:24px;gap:16px;flex-wrap:wrap}
+  .brand{display:flex;align-items:baseline;gap:14px}
+  .brand-mark{font-weight:800;font-size:24px;letter-spacing:-0.02em;color:var(--accent);font-family:var(--mono)}
+  .brand-title{font-size:17px;color:var(--ink-2);letter-spacing:-0.01em}
+  .version{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--surface);padding:4px 10px;border:1px solid var(--line);border-radius:999px;letter-spacing:0.02em}
+
+  /* File status indicator */
+  .file-status{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:8px;font-size:12px;font-family:var(--mono);border:1px solid var(--line);background:var(--surface);transition:all .15s}
+  .file-status.is-connected{background:var(--success-bg);border-color:var(--success);color:var(--success)}
+  .file-status.is-unsupported{background:var(--this-week);border-color:var(--this-week-border);color:var(--bar-accent-ink)}
+  .file-status-icon{font-size:14px}
+  .file-status-text{font-weight:600;letter-spacing:-0.01em}
+  .file-status-name{color:var(--muted);font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file-status.is-connected .file-status-name{color:var(--ink-2)}
+  .disconnect-btn{font-size:11px;color:var(--muted);padding:3px 8px;border-radius:4px;border:1px solid transparent;transition:all .15s;margin-left:4px}
+  .disconnect-btn:hover{color:var(--today);border-color:var(--today);background:var(--surface)}
+
+  .month-control{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:16px 22px;background:var(--surface);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
+  .nav-btn{width:36px;height:36px;border-radius:8px;font-size:13px;color:var(--ink-2);border:1px solid var(--line);background:var(--bg);transition:all .15s}
+  .nav-btn:hover{border-color:var(--ink);color:var(--ink)}
+  .month-display{flex:1;text-align:center;min-width:180px}
+  .month-label{font-size:11px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:4px;font-weight:500}
+  .month-title{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;font-feature-settings:"tnum"}
+  .reset-btn{font-size:12px;color:var(--accent);padding:8px 14px;border:1px solid var(--accent);border-radius:8px;transition:all .15s}
+  .reset-btn:hover{background:var(--accent);color:var(--surface)}
+  .this-week-chip{font-family:var(--mono);font-size:11px;color:var(--bar-accent-ink);background:var(--this-week);padding:6px 12px;border-radius:6px;border:1px solid var(--this-week-border)}
+
+  .writer-info{display:flex;gap:12px;margin-bottom:20px}
+  .writer-info input{flex:1;padding:12px 16px;font-size:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);transition:border-color .15s}
+  .writer-info input:focus{outline:none;border-color:var(--ink)}
+
+  .calendar-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px;overflow-x:auto}
+  .cal-toolbar{display:flex;justify-content:flex-end;align-items:center;padding:0 0 12px 0;gap:10px}
+  .cal-toolbar-label{font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;font-weight:500}
+  .cal-view-toggle{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:2px}
+  .cal-view-btn{padding:6px 14px;font-size:12px;font-weight:600;color:var(--muted);border-radius:6px;transition:all .12s;font-family:inherit;letter-spacing:-0.01em}
+  .cal-view-btn:hover{color:var(--ink)}
+  .cal-view-btn.is-active{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+  .calendar{display:grid;gap:0;min-width:800px}
+  .calendar.is-expanded{min-width:1400px}
+  .calendar.is-expanded .cal-bg{min-height:48px}
+  .calendar.is-expanded .cal-task-bar{
+    white-space:normal;
+    word-break:keep-all;
+    overflow-wrap:anywhere;
+    text-overflow:clip;
+    padding:7px 8px;
+    line-height:1.35;
+    min-height:38px;
+    height:auto;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    font-size:12.5px;
+  }
+  /* 15자 이하 짧은 제목은 한 줄로 — 필요 시 셀 밖으로 늘어남 */
+  .calendar.is-expanded .cal-task-bar.is-short-title{
+    white-space:nowrap;
+    min-width:max-content;
+    z-index:3;
+  }
+  .cal-corner{grid-column:1;grid-row:1 / span 2;background:var(--bg);border:1px solid var(--line-soft);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);text-align:center;padding:6px;line-height:1.3;white-space:pre}
+  .cal-day-num{grid-row:1;border:1px solid var(--line-soft);padding:8px 2px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink-2);background:var(--bg)}
+  .cal-day-num.is-highlight{background:var(--this-week);color:var(--bar-accent-ink)}
+  .cal-day-num.is-today{background:var(--today);color:#fff}
+  .cal-weekday{grid-row:2;border:1px solid var(--line-soft);padding:6px 2px;text-align:center;font-size:11px;color:var(--ink-2);background:var(--surface)}
+  .cal-weekday.is-sat{color:#2a6b9c;background:#edf3f8}
+  .cal-weekday.is-sun{color:#c0392b;background:var(--sunday)}
+  .cal-weekday.is-highlight{background:var(--this-week);color:var(--bar-accent-ink);font-weight:600}
+  .cal-weekday.is-today{background:var(--today);color:#fff;font-weight:700}
+  .cal-bg{border:1px solid var(--line-soft);background:var(--surface);min-height:38px}
+  .cal-bg.is-weekend{background:var(--weekend)}
+  .cal-bg.is-sunday{background:var(--sunday)}
+  .cal-bg.is-highlight{background:var(--this-week)}
+  .cal-task-bar{display:flex;align-items:center;padding:4px 8px;font-size:12px;font-weight:500;background:var(--bar-bg);color:var(--bar-ink);border-radius:6px;margin:3px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:30px;border:1px solid rgba(0,0,0,0.05);transition:all .15s;cursor:pointer;z-index:1}
+  .cal-task-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink);z-index:2}
+  .cal-task-bar.is-focused{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(139,69,19,.3)}
+
+  .tw-section{background:var(--this-week);border:1px solid var(--this-week-border);border-radius:12px;padding:18px 22px;margin-bottom:14px;transition:padding .15s}
+  .tw-section.is-collapsed{padding-bottom:14px}
+  .tw-section.is-collapsed .tw-header{margin-bottom:0;padding-bottom:0;border-bottom:none}
+  .tw-section.is-collapsed .tw-list{display:none}
+  .tw-section.is-collapsed .tw-add-btn{display:none}
+  .tw-header-right{display:flex;align-items:center;gap:12px}
+  .tw-collapse-btn{color:var(--muted);font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid transparent;transition:all .15s;display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-weight:500}
+  .tw-collapse-btn:hover{color:var(--ink);background:var(--surface);border-color:var(--this-week-border-soft)}
+  .tw-collapse-btn .chevron{display:inline-block;transition:transform 0.2s;font-size:9px}
+  .tw-section:not(.is-collapsed) .tw-collapse-btn .chevron{transform:rotate(90deg)}
+  .tw-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--this-week-border-soft);gap:10px;flex-wrap:wrap}
+  .tw-title-group{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .tw-badge{display:inline-block;padding:5px 12px;background:var(--accent-mid);color:var(--bar-accent-ink);font-size:11px;font-weight:700;letter-spacing:0.1em;border-radius:4px;font-family:var(--mono);text-transform:uppercase;transition:background .15s}
+  .tw-range{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink);font-feature-settings:"tnum"}
+  /* Inline week toggle (input view) */
+  .tw-week-toggle{display:inline-flex;background:rgba(255,253,248,0.6);border:1px solid var(--this-week-border-soft);border-radius:8px;padding:2px}
+  .tw-week-toggle-btn{padding:6px 14px;font-size:12px;font-weight:600;color:var(--muted);border-radius:6px;transition:all .15s;letter-spacing:-0.01em;font-family:inherit}
+  .tw-week-toggle-btn:hover{color:var(--ink)}
+  .tw-week-toggle-btn.is-active{background:var(--accent-mid);color:var(--bar-accent-ink)}
+  .tw-week-toggle-btn.is-active:hover{color:var(--bar-accent-ink)}
+  .task-count{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:500}
+  .tw-list{display:flex;flex-direction:column;gap:6px}
+  .tw-item{display:grid;grid-template-columns:1fr 140px 28px 28px;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;background:var(--surface);border:1px solid transparent;transition:all .12s}
+  .tw-item:focus-within{border-color:var(--accent)}
+  .tw-item.is-editing{border-color:var(--accent);background:var(--accent-soft)}
+  .tw-title-input{font-size:14px;padding:8px 10px;border:1px solid transparent;background:var(--bg);border-radius:6px;font-weight:500}
+  .tw-title-input:focus{outline:none;border-color:var(--line);background:var(--surface)}
+  .tw-dates-cell{text-align:center}
+  .tw-dates{font-family:var(--mono);font-size:12px;color:var(--ink-2);text-align:center;letter-spacing:-0.01em;font-feature-settings:"tnum"}
+  .tw-dates-edit{display:none;align-items:center;justify-content:center;gap:4px}
+  .tw-item.is-editing .tw-dates{display:none}
+  .tw-item.is-editing .tw-dates-edit{display:flex}
+  .tw-day-input{font-family:var(--mono);font-size:13px;padding:6px;border:1px solid var(--line);background:var(--surface);border-radius:6px;text-align:center;width:48px;font-feature-settings:"tnum";color:inherit}
+  .tw-day-input:focus{outline:none;border-color:var(--accent)}
+  .tw-dates-sep{color:var(--muted);font-size:12px}
+  .tw-edit{color:var(--muted);font-size:14px;line-height:1;padding:4px;border-radius:4px;transition:all .15s}
+  .tw-edit:hover{color:var(--accent);background:var(--bg)}
+  .tw-item.is-editing .tw-edit{color:var(--success);font-weight:700;font-size:16px}
+  .tw-item.is-editing .tw-edit:hover{color:#256539;background:var(--success-bg)}
+  .tw-empty{text-align:center;padding:18px;color:var(--muted);font-size:13px;font-style:italic}
+  .tw-add-btn{margin-top:10px;padding:10px;font-size:13px;color:var(--accent);border:1px dashed var(--this-week-border);border-radius:8px;transition:all .15s;width:100%;background:rgba(255,253,248,0.4)}
+  .tw-add-btn:hover{border-style:solid;background:var(--surface)}
+  .task-remove{color:var(--muted);font-size:18px;line-height:1;padding:4px;border-radius:4px;transition:all .15s}
+  .task-remove:hover{color:var(--today);background:var(--bg)}
+
+  .all-section{margin-bottom:22px}
+  .section-toggle{width:100%;display:flex;align-items:center;gap:10px;padding:14px 22px;text-align:left;font-size:14px;font-weight:600;color:var(--ink);border-radius:12px;background:var(--surface);border:1px solid var(--line);transition:all 0.15s}
+  .section-toggle:hover{border-color:var(--ink-2)}
+  .chevron{display:inline-block;transition:transform 0.2s;font-size:10px;color:var(--muted);width:12px}
+  .section-toggle.is-open .chevron{transform:rotate(90deg)}
+  .section-toggle.is-open{border-radius:12px 12px 0 0;border-bottom-color:var(--line-soft)}
+  .all-section-label{flex:1}
+  .all-section-month{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:500}
+  .all-content{background:var(--surface);border:1px solid var(--line);border-top:none;border-radius:0 0 12px 12px;padding:16px 22px 18px}
+  .task-list{display:flex;flex-direction:column;gap:6px}
+  .task-row{display:grid;grid-template-columns:1fr 80px 80px 28px;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid transparent;transition:all .12s}
+  .task-row:focus-within{border-color:var(--accent);background:var(--accent-soft)}
+  .task-row.is-focused{border-color:var(--accent);background:var(--accent-soft)}
+  .task-row.is-invalid{border-color:var(--today)}
+  .task-title-input{font-size:14px;padding:8px 10px;border:1px solid transparent;background:var(--surface);border-radius:6px;font-weight:500}
+  .task-title-input:focus{outline:none;border-color:var(--line)}
+  .task-day-input{font-family:var(--mono);font-size:13px;padding:8px;border:1px solid var(--line);background:var(--surface);border-radius:6px;text-align:center;font-feature-settings:"tnum"}
+  .task-day-input:focus{outline:none;border-color:var(--accent)}
+  .task-empty{text-align:center;padding:24px;color:var(--muted);font-size:13px;font-style:italic}
+  .add-task-btn{margin-top:10px;padding:11px;font-size:13px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;transition:all .15s;width:100%}
+  .add-task-btn:hover{color:var(--accent);border-color:var(--accent);border-style:solid;background:var(--accent-soft)}
+  .task-list-header{display:grid;grid-template-columns:1fr 80px 80px 28px;gap:10px;padding:0 12px 6px;font-size:11px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
+  .task-list-header span:nth-child(2),.task-list-header span:nth-child(3){text-align:center}
+
+  .actions{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0;margin-bottom:20px;border-bottom:1px solid var(--line-soft)}
+  .actions-left{flex:1;display:flex;gap:10px;flex-wrap:wrap}
+  .btn-secondary,.btn-primary,.btn-save{padding:13px 22px;font-size:14px;font-weight:600;border-radius:10px;transition:all .15s;letter-spacing:-0.01em}
+  .btn-secondary{color:var(--ink);border:1px solid var(--line);background:var(--surface)}
+  .btn-secondary:hover{border-color:var(--ink)}
+  .btn-primary{color:var(--surface);background:var(--ink)}
+  .btn-primary:hover{background:var(--accent)}
+  .btn-save{color:var(--surface);background:var(--success);border:1px solid var(--success)}
+  .btn-save:hover{background:#256539;border-color:#256539}
+  .btn-save:disabled{background:var(--muted);border-color:var(--muted);cursor:not-allowed;opacity:0.6}
+  .btn-save-secondary{color:var(--success);border:1px solid var(--success);background:var(--surface)}
+  .btn-save-secondary:hover{background:var(--success-bg)}
+  .btn-link{background:none;color:var(--muted);font-size:12px;text-decoration:underline;padding:6px 4px}
+  .btn-link:hover{color:var(--ink)}
+
+  .hint{margin-top:16px;font-size:12px;color:var(--muted);text-align:center;line-height:1.6}
+  .hint kbd{font-family:var(--mono);font-size:11px;padding:2px 6px;background:var(--surface);border:1px solid var(--line);border-radius:4px;color:var(--ink-2)}
+
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:12px 22px;background:var(--ink);color:var(--surface);border-radius:10px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.15);opacity:0;transition:opacity .2s;z-index:1000;pointer-events:none;max-width:80vw}
+  .toast.is-visible{opacity:1}
+  .toast.is-success{background:var(--success)}
+  .toast.is-error{background:var(--today)}
+
+  /* Task Detail Modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(26,24,20,0.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+  .modal-overlay.is-open{display:flex;animation:modalFadeIn 0.15s ease-out}
+  @keyframes modalFadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes modalSlideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .modal{background:var(--surface);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:600px;max-height:90vh;display:flex;flex-direction:column;animation:modalSlideUp 0.2s ease-out}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--line-soft)}
+  .modal-title{font-size:12px;font-weight:700;color:var(--ink-2);letter-spacing:0.12em;text-transform:uppercase;font-family:var(--mono)}
+  .modal-close{width:32px;height:32px;border-radius:8px;color:var(--muted);font-size:20px;line-height:1;transition:all .15s;font-family:inherit}
+  .modal-close:hover{color:var(--ink);background:var(--bg)}
+  .modal-body{padding:22px 24px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:18px}
+  .modal-field{display:flex;flex-direction:column;gap:6px}
+  .modal-label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase}
+  .modal-input{padding:11px 14px;font-size:15px;font-weight:500;border:1px solid var(--line);background:var(--bg);border-radius:8px;font-family:inherit;color:var(--ink);width:100%}
+  .modal-input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+  .modal-dates{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .modal-date-input{width:80px;padding:10px 12px;font-family:var(--mono);font-size:14px;text-align:center;border:1px solid var(--line);background:var(--bg);border-radius:8px;color:var(--ink);font-feature-settings:"tnum"}
+  .modal-date-input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+  .modal-dates-sep{color:var(--muted);font-size:14px}
+  .modal-dates-display{margin-left:auto;font-size:13px;color:var(--muted);font-family:var(--mono);font-feature-settings:"tnum"}
+  .modal-notes{padding:12px 14px;font-size:14px;line-height:1.6;border:1px solid var(--line);background:var(--bg);border-radius:8px;font-family:inherit;color:var(--ink);min-height:160px;resize:vertical;width:100%}
+  .modal-notes:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+  .modal-footer{display:flex;justify-content:space-between;padding:14px 24px;border-top:1px solid var(--line-soft);gap:12px;align-items:center}
+  .modal-hint{font-size:11px;color:var(--muted)}
+  .modal-actions{display:flex;gap:10px}
+  .modal-delete-btn{padding:10px 16px;font-size:13px;color:var(--today);border:1px solid var(--today);border-radius:8px;font-weight:600;transition:all .15s;background:var(--surface);font-family:inherit}
+  .modal-delete-btn:hover{background:var(--today);color:var(--surface)}
+  .modal-save-btn{padding:10px 22px;font-size:13px;color:var(--surface);background:var(--success);border:1px solid var(--success);border-radius:8px;font-weight:600;transition:all .15s;font-family:inherit}
+  .modal-save-btn:hover{background:#256539;border-color:#256539}
+
+  /* Sheet tabs (monthly / annual) */
+  .view-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--line);padding:0 4px}
+  .view-tab{padding:12px 22px;font-size:14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;font-family:inherit;letter-spacing:-0.01em;display:inline-flex;align-items:center;gap:8px}
+  .view-tab:hover{color:var(--ink-2)}
+  .view-tab.is-active{color:var(--accent);border-bottom-color:var(--accent)}
+  .view-tab-icon{font-size:15px}
+
+  /* Annual (Sheet1) view */
+  .annual-control{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:16px 22px;background:var(--surface);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
+  .annual-display{flex:1;text-align:center;min-width:220px}
+  .annual-label{font-size:11px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:4px;font-weight:500}
+  .annual-title{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;font-feature-settings:"tnum"}
+  .annual-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px;overflow-x:auto}
+  .annual-grid{display:grid;gap:0;min-width:1400px}
+  .annual-corner{grid-row:1 / span 3;grid-column:1;background:var(--bg);border:1px solid var(--line-soft);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);padding:6px;white-space:pre;text-align:center}
+  .annual-month-cell{grid-row:1;border:1px solid var(--line-soft);padding:8px 4px;text-align:center;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--ink);background:var(--accent-soft)}
+  .annual-weekinmonth{grid-row:2;border:1px solid var(--line-soft);padding:4px 2px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--ink-2);background:var(--bg)}
+  .annual-weeknum{grid-row:3;border:1px solid var(--line-soft);padding:4px 2px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface)}
+  .annual-rowlabel{border:1px solid var(--line-soft);padding:6px 8px;display:flex;align-items:center;justify-content:space-between;gap:6px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink-2);background:var(--bg);position:relative}
+  .annual-rowlabel .row-remove{opacity:0;color:var(--muted);font-size:16px;line-height:1;padding:3px 5px;border-radius:4px;transition:all .15s}
+  .annual-rowlabel:hover .row-remove{opacity:1}
+  .annual-rowlabel .row-remove:hover{color:var(--today);background:var(--surface)}
+  .annual-bg{border:1px solid var(--line-soft);background:var(--surface);min-height:44px}
+  .annual-bg.is-month-even{background:#fbf9f3}
+  .annual-bar{display:flex;align-items:center;padding:6px 10px;font-size:12.5px;font-weight:500;background:var(--bar-bg);color:var(--bar-ink);border-radius:6px;margin:4px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:32px;border:1px solid rgba(0,0,0,0.05);transition:all .15s;cursor:pointer;z-index:1}
+  .annual-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink);z-index:2}
+  .annual-bar.is-focused{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(139,69,19,.3)}
+  .annual-actions{display:flex;gap:10px}
+  .annual-empty{text-align:center;padding:60px 24px;color:var(--muted);font-size:14px;line-height:1.7;background:var(--surface);border:1px dashed var(--line);border-radius:12px}
+  .annual-empty strong{color:var(--ink-2)}
+
+  /* Briefing view — show notes beneath title */
+  .briefing-week-notes{margin-top:8px;font-size:13px;line-height:1.55;color:#a8a296;font-weight:400;white-space:pre-wrap;padding-left:2px;border-left:2px solid #3a3631;padding-left:10px}
+
+  /* Briefing view */
+  #briefing-view{background:#1a1814;color:#f5f2ea;min-height:100vh;padding:36px 40px;font-family:'Pretendard',system-ui,sans-serif}
+  .briefing-header{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;padding-bottom:22px;margin-bottom:26px;border-bottom:1px solid #3a3631;gap:20px}
+  .briefing-left{display:flex;flex-direction:column;gap:5px}
+  .briefing-dept{font-size:13px;letter-spacing:0.14em;color:#a8a296;text-transform:uppercase;font-family:var(--mono)}
+  .briefing-title{font-size:30px;font-weight:700;letter-spacing:-0.02em;line-height:1}
+  .briefing-center{text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
+  .week-toggle{display:inline-flex;background:#2a2621;border:1px solid #3a3631;border-radius:10px;padding:3px}
+  .week-toggle-btn{padding:9px 18px;font-size:14px;color:#a8a296;border-radius:7px;font-weight:700;transition:all .15s;letter-spacing:-0.01em}
+  .week-toggle-btn:hover{color:#f5f2ea}
+  .week-toggle-btn.is-active{background:#d4a44c;color:#1a1814}
+  .week-toggle-btn.is-active:hover{color:#1a1814}
+  .briefing-center-value{font-family:var(--mono);font-size:18px;font-weight:600;color:#d4a44c;letter-spacing:-0.01em;font-feature-settings:"tnum"}
+  .briefing-right{display:flex;justify-content:flex-end;align-items:end;gap:10px;flex-wrap:wrap}
+  .briefing-nav{display:flex;gap:6px;align-items:center}
+  .briefing-nav .nav-btn{background:transparent;border-color:#3a3631;color:#a8a296}
+  .briefing-nav .nav-btn:hover{color:#f5f2ea;border-color:#f5f2ea}
+  .briefing-month{font-family:var(--mono);font-size:14px;color:#d4a44c;padding:0 10px;font-weight:600}
+  .exit-btn{padding:10px 16px;font-size:13px;color:#a8a296;border:1px solid #3a3631;border-radius:8px;transition:all .15s}
+  .exit-btn:hover{color:#f5f2ea;border-color:#f5f2ea}
+
+  .briefing-calendar-wrap{overflow-x:auto;padding-bottom:8px}
+  .briefing-calendar{display:grid;gap:0;min-width:1000px}
+  .briefing-calendar .cal-corner{background:#2a2621;border-color:#3a3631;color:#a8a296;font-size:12px}
+  .briefing-calendar .cal-day-num{background:#2a2621;border-color:#3a3631;color:#f5f2ea;font-size:14px;padding:10px 2px}
+  .briefing-calendar .cal-day-num.is-highlight{background:#3a2a0a;color:#d4a44c}
+  .briefing-calendar .cal-day-num.is-today{background:#c0392b;color:#fff}
+  .briefing-calendar .cal-weekday{background:#2a2621;border-color:#3a3631;color:#a8a296;font-size:13px;padding:8px 2px}
+  .briefing-calendar .cal-weekday.is-sat{background:#1e2a3a;color:#8fb3d9}
+  .briefing-calendar .cal-weekday.is-sun{background:#2e1a1a;color:#d96666}
+  .briefing-calendar .cal-weekday.is-highlight{background:#3a2a0a;color:#d4a44c;font-weight:700}
+  .briefing-calendar .cal-weekday.is-today{background:#c0392b;color:#fff;font-weight:700}
+  .briefing-calendar .cal-bg{background:#2a2621;border-color:#3a3631;min-height:48px}
+  .briefing-calendar .cal-bg.is-weekend{background:#26221c}
+  .briefing-calendar .cal-bg.is-sunday{background:#2a1e1c}
+  .briefing-calendar .cal-bg.is-highlight{background:#302a22}
+  .briefing-calendar .cal-task-bar{background:#3a3631;color:#f5f2ea;font-size:14px;font-weight:600;min-height:38px;padding:6px 12px;border-radius:8px;margin:4px 3px;border-color:transparent;cursor:pointer}
+  .briefing-calendar .cal-task-bar.is-highlight-task{background:#d4a44c;color:#1a1814}
+  .briefing-calendar .cal-task-bar:hover{background:#4a4540;color:#fff;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,0.3)}
+  .briefing-calendar .cal-task-bar.is-highlight-task:hover{background:#e0b868;color:#1a1814}
+
+  .briefing-week-panel{margin-top:28px;background:#302a22;border:1px solid #d4a44c;border-radius:14px;padding:22px 28px}
+  .briefing-week-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #3a3631;flex-wrap:wrap;gap:10px}
+  .briefing-week-label{font-size:12px;letter-spacing:0.14em;color:#d4a44c;text-transform:uppercase;font-family:var(--mono);font-weight:600}
+  .briefing-week-range{font-family:var(--mono);font-size:16px;color:#f5f2ea;font-weight:500}
+  .briefing-week-list{display:flex;flex-direction:column;gap:10px}
+  .briefing-week-item{display:grid;grid-template-columns:180px 1fr;gap:18px;padding:10px 0;align-items:baseline;border-radius:6px;transition:background .12s}
+  .briefing-week-item:hover{background:rgba(212,164,76,0.08)}
+  .briefing-week-item + .briefing-week-item{border-top:1px solid #3a3631}
+  .briefing-week-days{font-family:var(--mono);font-size:14px;color:#d4a44c;font-weight:600}
+  .briefing-week-title{font-size:18px;font-weight:600;line-height:1.4;letter-spacing:-0.01em}
+  .briefing-week-empty{color:#5a564e;font-size:14px;font-style:italic;text-align:center;padding:14px 0}
+
+  body.briefing-active #input-view{display:none}
+</style>
+</head>
+<body>
+
+<main id="input-view">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">KAR</span>
+      <span class="brand-title">업무 일정 캘린더</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="file-status" id="file-status">
+        <span class="file-status-icon">⊘</span>
+        <span class="file-status-text">파일 미연결</span>
+      </div>
+      <span class="version">v1.5</span>
+    </div>
+  </header>
+
+  <div class="actions">
+    <div class="actions-left">
+      <button class="btn-secondary" id="btn-export-new">새 파일로 내보내기</button>
+    </div>
+    <button class="btn-secondary" id="btn-connect">📂 엑셀 파일 연결</button>
+    <button class="btn-save" id="btn-save" disabled>💾 저장</button>
+    <button class="btn-primary" id="btn-briefing">브리핑 모드 →</button>
+  </div>
+  <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
+
+  <nav class="view-tabs" role="tablist" aria-label="시트 전환">
+    <button class="view-tab is-active" data-view="monthly" role="tab" aria-selected="true"><span class="view-tab-icon">📅</span>월간 캘린더</button>
+    <button class="view-tab" data-view="annual" role="tab" aria-selected="false"><span class="view-tab-icon">🗓</span>연간 계획서</button>
+  </nav>
+
+  <section id="monthly-panel">
+  <section class="month-control">
+    <button class="nav-btn" id="prev-month" aria-label="이전 달">◀</button>
+    <div class="month-display">
+      <div class="month-label" id="month-label">이번 달</div>
+      <div class="month-title" id="month-title"></div>
+    </div>
+    <button class="nav-btn" id="next-month" aria-label="다음 달">▶</button>
+    <button class="reset-btn" id="reset-month">오늘</button>
+    <span class="this-week-chip" id="this-week-chip"></span>
+  </section>
+
+  <section class="writer-info">
+    <input type="text" id="writer-name" placeholder="이름" aria-label="이름">
+    <input type="text" id="writer-dept" placeholder="부서" aria-label="부서">
+  </section>
+
+  <section class="calendar-wrap">
+    <div class="cal-toolbar">
+      <span class="cal-toolbar-label">보기</span>
+      <div class="cal-view-toggle" role="tablist">
+        <button class="cal-view-btn is-active" data-cal-view="basic" role="tab">기본</button>
+        <button class="cal-view-btn" data-cal-view="expanded" role="tab">일정 펼치기</button>
+      </div>
+    </div>
+    <div class="calendar" id="calendar"></div>
+  </section>
+
+  <section class="tw-section" id="tw-section">
+    <div class="tw-header">
+      <div class="tw-title-group">
+        <div class="tw-week-toggle" role="tablist">
+          <button class="tw-week-toggle-btn is-active" data-tw-week="this" role="tab">이번주</button>
+          <button class="tw-week-toggle-btn" data-tw-week="next" role="tab">다음주</button>
+        </div>
+        <span class="tw-badge" id="tw-badge">이번주 업무</span>
+        <span class="tw-range" id="tw-range"></span>
+      </div>
+      <div class="tw-header-right">
+        <span class="task-count" id="tw-count"></span>
+        <button class="tw-collapse-btn" id="tw-collapse-btn" aria-expanded="false" aria-label="접기/펼치기">
+          <span class="chevron">▶</span>
+          <span id="tw-collapse-label">펼치기</span>
+        </button>
+      </div>
+    </div>
+    <div class="tw-list" id="tw-list"></div>
+    <button class="tw-add-btn" id="add-tw-task-btn">+ 이번주 업무 추가</button>
+  </section>
+
+  <section class="all-section">
+    <button class="section-toggle" id="all-toggle" aria-expanded="false">
+      <span class="chevron">▶</span>
+      <span class="all-section-label">이번 달 전체 업무</span>
+      <span class="all-section-month" id="all-section-month"></span>
+      <span class="task-count" id="all-count"></span>
+    </button>
+    <div class="all-content" id="all-content" hidden>
+      <div class="task-list-header">
+        <span>업무 내용</span>
+        <span>시작일</span>
+        <span>종료일</span>
+        <span></span>
+      </div>
+      <div class="task-list" id="task-list"></div>
+      <button class="add-task-btn" id="add-task-btn">+ 업무 추가</button>
+    </div>
+  </section>
+  </section><!-- /#monthly-panel -->
+
+  <section id="annual-panel" hidden>
+    <div class="annual-control">
+      <button class="nav-btn" id="a-prev-year" aria-label="이전 연도">◀</button>
+      <div class="annual-display">
+        <div class="annual-label">연간 계획서</div>
+        <div class="annual-title" id="annual-title"></div>
+      </div>
+      <button class="nav-btn" id="a-next-year" aria-label="다음 연도">▶</button>
+      <button class="reset-btn" id="a-reset-year">올해</button>
+    </div>
+    <div id="annual-body"></div>
+    <div class="annual-actions">
+      <button class="add-task-btn" id="add-annual-row-btn">+ 프로젝트 행 추가</button>
+    </div>
+  </section>
+
+  <p class="hint">
+    <strong>처음 사용:</strong> <kbd>📂 엑셀 파일 연결</kbd>로 엑셀 파일 선택 → 기존 내용 불러오기 + 그 파일에 저장 가능해집니다<br>
+    <strong>이후:</strong> <kbd>💾 저장</kbd> 또는 <kbd>Ctrl+S</kbd> 누르면 연결된 파일에 조용히 덮어쓰기됩니다<br>
+    <span style="color:var(--muted);font-size:11px">※ 파일 연결 창은 자동으로 이전에 선택한 엑셀 파일이 있던 폴더에서 열립니다</span>
+  </p>
+</main>
+
+<main id="briefing-view" hidden>
+  <header class="briefing-header">
+    <div class="briefing-left">
+      <div class="briefing-dept" id="briefing-dept"></div>
+      <div class="briefing-title">업무 일정 및 계획</div>
+    </div>
+    <div class="briefing-center">
+      <div class="week-toggle" role="tablist">
+        <button class="week-toggle-btn" data-week="last" role="tab">지난주</button>
+        <button class="week-toggle-btn is-active" data-week="this" role="tab">이번주</button>
+      </div>
+      <div class="briefing-center-value" id="briefing-week-range"></div>
+    </div>
+    <div class="briefing-right">
+      <div class="briefing-nav">
+        <button class="nav-btn" id="b-prev-month" aria-label="이전 달">◀</button>
+        <span class="briefing-month" id="briefing-month"></span>
+        <button class="nav-btn" id="b-next-month" aria-label="다음 달">▶</button>
+      </div>
+      <button class="exit-btn" id="btn-exit">← 편집</button>
+    </div>
+  </header>
+
+  <div class="briefing-calendar-wrap">
+    <div class="briefing-calendar" id="briefing-calendar"></div>
+  </div>
+
+  <section class="briefing-week-panel">
+    <div class="briefing-week-header">
+      <span class="briefing-week-label" id="briefing-week-label">이번주 업무</span>
+      <span class="briefing-week-range" id="briefing-week-range-full"></span>
+    </div>
+    <div class="briefing-week-list" id="briefing-week-list"></div>
+  </section>
+</main>
+
+<!-- Annual Bar Detail Modal -->
+<div class="modal-overlay" id="annual-bar-modal" role="dialog" aria-modal="true" aria-labelledby="annual-modal-title-text">
+  <div class="modal" role="document">
+    <div class="modal-header">
+      <div class="modal-title" id="annual-modal-title-text">연간 계획서 · 업무 상세</div>
+      <button class="modal-close" id="annual-modal-close-btn" aria-label="닫기">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label class="modal-label" for="annual-modal-title-input">업무 제목</label>
+        <input type="text" class="modal-input" id="annual-modal-title-input" placeholder="업무 내용">
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">기간 (월 · 주)</label>
+        <div class="modal-dates">
+          <select class="modal-date-input" id="annual-modal-start-month" style="width:70px" aria-label="시작 월"></select>
+          <select class="modal-date-input" id="annual-modal-start-week" style="width:70px" aria-label="시작 주"></select>
+          <span class="modal-dates-sep">—</span>
+          <select class="modal-date-input" id="annual-modal-end-month" style="width:70px" aria-label="종료 월"></select>
+          <select class="modal-date-input" id="annual-modal-end-week" style="width:70px" aria-label="종료 주"></select>
+          <span class="modal-dates-display" id="annual-modal-dates-display"></span>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label" for="annual-modal-notes-input">세부 내용</label>
+        <textarea class="modal-notes" id="annual-modal-notes-input" placeholder="상세 메모, 체크리스트 등을 자유롭게 적으세요..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-hint">💡 입력 즉시 저장됩니다 · ESC로 닫기</span>
+      <div class="modal-actions">
+        <button class="modal-delete-btn" id="annual-modal-delete-btn">삭제</button>
+        <button class="modal-save-btn" id="annual-modal-save-btn">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Task Detail Modal -->
+<div class="modal-overlay" id="task-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
+  <div class="modal" role="document">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title-text">업무 상세</div>
+      <button class="modal-close" id="modal-close-btn" aria-label="닫기">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label class="modal-label" for="modal-title-input">업무 제목</label>
+        <input type="text" class="modal-input" id="modal-title-input" placeholder="업무 내용">
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">기간</label>
+        <div class="modal-dates">
+          <input type="number" class="modal-date-input" id="modal-start-input" min="1" max="31" aria-label="시작일">
+          <span class="modal-dates-sep">-</span>
+          <input type="number" class="modal-date-input" id="modal-end-input" min="1" max="31" aria-label="종료일">
+          <span class="modal-dates-display" id="modal-dates-display"></span>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label" for="modal-notes-input">세부 내용</label>
+        <textarea class="modal-notes" id="modal-notes-input" placeholder="상세 메모, 체크리스트, 참고 링크 등을 자유롭게 적으세요..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-hint">💡 입력 즉시 저장됩니다 · ESC로 닫기</span>
+      <div class="modal-actions">
+        <button class="modal-delete-btn" id="modal-delete-btn">삭제</button>
+        <button class="modal-save-btn" id="modal-save-btn">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const WEEKDAYS_KR = ['일','월','화','수','목','금','토'];
+  const STORAGE_KEY = 'kar_monthly_schedule_v1';
+  const WRITER_KEY = 'kar_weekly_writer_v1';
+  const FILE_HANDLE_KEY = 'kar_excel_file_handle_v1';
+  const CAL_VIEW_KEY = 'kar_cal_view_v1'; // 'basic' | 'expanded'
+  const ANNUAL_STORAGE_KEY = 'kar_annual_schedule_v1';
+  const VIEW_KEY = 'kar_current_view_v1'; // 'monthly' | 'annual'
+  const ANNUAL_YEAR_KEY = 'kar_current_annual_year_v1';
+
+  const FS_API_SUPPORTED = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+
+  const pad = n => String(n).padStart(2,'0');
+  const fmtISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const monthKey = (y,m) => `${y}-${pad(m+1)}`;
+  function daysInMonth(y,m){ return new Date(y, m+1, 0).getDate(); }
+  function weekdayOf(y,m,d){ return new Date(y,m,d).getDay(); }
+  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+  function getThisWeekMonday(from=new Date()){
+    const d = new Date(from.getFullYear(),from.getMonth(),from.getDate());
+    const day = d.getDay();
+    const delta = day === 0 ? -6 : (1 - day);
+    return addDays(d,delta);
+  }
+  function uid(){ return 't_' + Math.random().toString(36).slice(2,9); }
+  function projUid(){ return 'p_' + Math.random().toString(36).slice(2,9); }
+  function barUid(){ return 'b_' + Math.random().toString(36).slice(2,9); }
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayY = today.getFullYear();
+  const todayM = today.getMonth();
+  const todayD = today.getDate();
+  const thisMon = getThisWeekMonday();
+  const thisFri = addDays(thisMon, 4);
+  const lastMon = addDays(thisMon, -7);
+  const lastFri = addDays(thisMon, -3);
+  const nextMon = addDays(thisMon, 7);
+  const nextFri = addDays(thisMon, 11);
+
+  let currentYear = todayY;
+  let currentMonth = todayM;
+  let briefingYear = thisMon.getFullYear();
+  let briefingMonth = thisMon.getMonth();
+  let briefingWeek = 'this';
+  let twSelectedWeek = 'this'; // 'this' | 'next' — 입력 뷰의 주간 섹션
+  let twCollapsed = true; // 이번주/다음주 섹션 접힘 상태 — 기본 접힘
+  let calendarExpanded = false; // 캘린더 펼치기 모드 (기본=false)
+  const editingTwIds = new Set();
+  let monthData = loadAll();
+  let focusedTaskId = null;
+  let allSectionOpen = false;
+  let fileHandle = null;
+  let isDirty = false;
+  let annualData = loadAnnualAll();
+  let currentView = loadCurrentView();
+  let currentAnnualYear = loadAnnualYear();
+  let focusedBarId = null;
+
+  function loadAnnualAll(){
+    try{ return JSON.parse(localStorage.getItem(ANNUAL_STORAGE_KEY) || '{}'); }
+    catch(e){ return {}; }
+  }
+  function saveAnnualLocal(){
+    try{ localStorage.setItem(ANNUAL_STORAGE_KEY, JSON.stringify(annualData)); }catch(e){}
+    isDirty = true;
+    updateSaveButtonState();
+  }
+  function loadCurrentView(){
+    try{ const v = localStorage.getItem(VIEW_KEY); return (v === 'annual') ? 'annual' : 'monthly'; }
+    catch(e){ return 'monthly'; }
+  }
+  function loadAnnualYear(){
+    try{
+      const y = parseInt(localStorage.getItem(ANNUAL_YEAR_KEY) || '', 10);
+      if (Number.isFinite(y) && y >= 1900 && y <= 3000) return y;
+    }catch(e){}
+    return new Date().getFullYear();
+  }
+  // Default monthWeeks: 52 weeks distributed across 12 months as 5,4,4,5,4,4,5,4,5,4,4,4
+  function defaultMonthWeeks(){
+    const pattern = [5,4,4,5,4,4,5,4,5,4,4,4];
+    const result = [];
+    let col = 1;
+    for (let i = 0; i < 12; i++){
+      result.push({ month: i+1, startCol: col, endCol: col + pattern[i] - 1, weekCount: pattern[i] });
+      col += pattern[i];
+    }
+    return result;
+  }
+  function getOrCreateAnnual(year){
+    const key = String(year);
+    if (!annualData[key]){
+      annualData[key] = {
+        title: `${year}년 연구 개발 계획`,
+        totalWeeks: 52,
+        monthWeeks: defaultMonthWeeks(),
+        projects: []
+      };
+    }
+    // 구형 데이터 복구
+    const a = annualData[key];
+    if (!a.monthWeeks || a.monthWeeks.length === 0) a.monthWeeks = defaultMonthWeeks();
+    if (!a.totalWeeks) a.totalWeeks = 52;
+    if (!a.projects) a.projects = [];
+    if (!a.title) a.title = `${year}년 연구 개발 계획`;
+    return a;
+  }
+
+  function loadAll(){
+    try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+    catch(e){ return {}; }
+  }
+  function saveAllLocal(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
+    isDirty = true;
+    updateSaveButtonState();
+  }
+  function getMonth(y,m){
+    const key = monthKey(y,m);
+    if (!monthData[key]) monthData[key] = { tasks: [] };
+    return monthData[key];
+  }
+  function loadWriter(){
+    try{ return JSON.parse(localStorage.getItem(WRITER_KEY) || '{}'); }
+    catch(e){ return {}; }
+  }
+  function saveWriter(){
+    const writer = {
+      name: document.getElementById('writer-name').value,
+      dept: document.getElementById('writer-dept').value
+    };
+    try{ localStorage.setItem(WRITER_KEY, JSON.stringify(writer)); }catch(e){}
+    isDirty = true;
+    updateSaveButtonState();
+  }
+
+  function showToast(msg, variant='', duration=2600){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast is-visible' + (variant ? ' is-' + variant : '');
+    clearTimeout(showToast._tid);
+    showToast._tid = setTimeout(() => t.classList.remove('is-visible'), duration);
+  }
+
+  function assignRows(tasks){
+    const sorted = [...tasks].sort((a,b) => a.start - b.start || a.end - b.end);
+    const rows = [];
+    sorted.forEach(t => {
+      let placed = false;
+      for (let i = 0; i < rows.length; i++){
+        if (rows[i] < t.start){ t._row = i; rows[i] = t.end; placed = true; break; }
+      }
+      if (!placed){ t._row = rows.length; rows.push(t.end); }
+    });
+    return { rowCount: Math.max(1, rows.length), ordered: sorted };
+  }
+
+  function isInRange(y,m,d, startDate, endDate){
+    const dt = new Date(y,m,d); dt.setHours(0,0,0,0);
+    return dt >= startDate && dt <= endDate;
+  }
+  function taskOverlapsRange(t, y, m, startDate, endDate){
+    const taskStart = new Date(y, m, t.start);
+    const taskEnd = new Date(y, m, t.end);
+    return taskEnd >= startDate && taskStart <= endDate;
+  }
+  function getBriefingWeekRange(){
+    return briefingWeek === 'last'
+      ? { start: lastMon, end: lastFri, label: '지난주' }
+      : { start: thisMon, end: thisFri, label: '이번주' };
+  }
+  function getTwRange(){
+    return twSelectedWeek === 'next'
+      ? { start: nextMon, end: nextFri, label: '다음주' }
+      : { start: thisMon, end: thisFri, label: '이번주' };
+  }
+  function isTodayDay(y,m,d){ return y===todayY && m===todayM && d===todayD; }
+
+  function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ---------- File System Access API ----------
+  async function restoreFileHandle(){
+    if (!FS_API_SUPPORTED) {
+      renderFileStatus();
+      return;
+    }
+    try {
+      if (!window.idbKeyval) return;
+      const stored = await window.idbKeyval.get(FILE_HANDLE_KEY);
+      if (stored) {
+        fileHandle = stored;
+        renderFileStatus();
+      }
+    } catch(e){ console.warn('Could not restore file handle:', e); }
+  }
+
+  async function connectExcelFile(){
+    if (!FS_API_SUPPORTED){
+      alert('이 브라우저는 파일 연결 기능을 지원하지 않습니다.\nChrome 또는 Edge 최신 버전을 사용해주세요.');
+      return;
+    }
+    try {
+      const opts = {
+        id: 'kar-excel-folder', // 브라우저가 이 id로 마지막 위치를 기억
+        types: [{
+          description: 'Excel files',
+          accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
+        }],
+        multiple: false
+      };
+      // 이전에 연결한 파일이 있으면 그 파일이 있는 폴더에서 열기
+      if (fileHandle) opts.startIn = fileHandle;
+
+      let handle;
+      try {
+        [handle] = await window.showOpenFilePicker(opts);
+      } catch(innerErr){
+        if (innerErr.name === 'AbortError') return;
+        // startIn 파일 핸들이 유효하지 않으면 한번 더 시도 (예: 파일이 삭제됨)
+        if (opts.startIn){
+          delete opts.startIn;
+          try { [handle] = await window.showOpenFilePicker(opts); }
+          catch(retryErr){
+            if (retryErr.name === 'AbortError') return;
+            throw retryErr;
+          }
+        } else {
+          throw innerErr;
+        }
+      }
+
+      // Read the file first to import existing data
+      const file = await handle.getFile();
+      const ab = await file.arrayBuffer();
+      const importResult = tryImportExcel(ab, file.name);
+      const monthlyCount = importResult.monthly.count;
+      const annualCount = importResult.annual.count;
+      const totalCount = monthlyCount + annualCount;
+
+      // Ask about merging imported data if anything found
+      if (totalCount > 0){
+        const existingMonthlyCount = Object.values(monthData).reduce((s,md) => s + (md.tasks||[]).length, 0);
+        const existingAnnualCount = Object.values(annualData).reduce((s, a) => s + (a.projects||[]).reduce((ss, p) => ss + (p.bars||[]).length, 0), 0);
+        const existingTotal = existingMonthlyCount + existingAnnualCount;
+        let doImport = true;
+        if (existingTotal > 0){
+          const foundParts = [];
+          if (monthlyCount > 0) foundParts.push(`월간 ${monthlyCount}개`);
+          if (annualCount > 0) foundParts.push(`연간 ${annualCount}개`);
+          const existingParts = [];
+          if (existingMonthlyCount > 0) existingParts.push(`월간 ${existingMonthlyCount}개`);
+          if (existingAnnualCount > 0) existingParts.push(`연간 ${existingAnnualCount}개`);
+          doImport = confirm(
+            `"${file.name}"에서 ${foundParts.join(', ')} 업무를 발견했습니다.\n\n` +
+            `현재 등록된 업무: ${existingParts.join(', ')}\n\n` +
+            `[확인] 파일 내용으로 교체\n` +
+            `[취소] 기존 업무 유지 (파일은 연결만 하고 내용은 무시)`
+          );
+        }
+        if (doImport){
+          // 월간 가져오기
+          monthData = {};
+          Object.entries(importResult.monthly.parsed).forEach(([key, tasks]) => {
+            if (!monthData[key]) monthData[key] = { tasks: [] };
+            tasks.forEach(t => {
+              monthData[key].tasks.push({ id: uid(), title: t.title, start: t.start, end: t.end, notes: t.notes || '' });
+            });
+          });
+          try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
+          // 월간이 있으면 가장 이른 월로 이동
+          const importedMonths = Object.keys(importResult.monthly.parsed).filter(k => importResult.monthly.parsed[k].length > 0).sort();
+          if (importedMonths.length > 0){
+            const [y,m] = importedMonths[0].split('-').map((v,i) => i===0 ? parseInt(v,10) : parseInt(v,10)-1);
+            currentYear = y; currentMonth = m;
+          }
+          // 연간 가져오기
+          if (importResult.annual.parsed){
+            const a = importResult.annual.parsed;
+            const yearKey = String(a.year);
+            annualData = {}; // 교체 모드에서는 전체 교체
+            annualData[yearKey] = a;
+            currentAnnualYear = a.year;
+            try{ localStorage.setItem(ANNUAL_STORAGE_KEY, JSON.stringify(annualData)); }catch(e){}
+            try{ localStorage.setItem(ANNUAL_YEAR_KEY, String(a.year)); }catch(e){}
+          } else {
+            annualData = {};
+            try{ localStorage.setItem(ANNUAL_STORAGE_KEY, '{}'); }catch(e){}
+          }
+        }
+      }
+
+      // Save handle to IndexedDB for persistence
+      fileHandle = handle;
+      try {
+        if (window.idbKeyval) await window.idbKeyval.set(FILE_HANDLE_KEY, handle);
+      } catch(e){ console.warn('Could not persist file handle:', e); }
+
+      isDirty = false;
+      renderFileStatus();
+      renderMonthHeader();
+      renderCalendar();
+      renderThisWeek();
+      if (allSectionOpen) renderAllTasks();
+      if (currentView === 'annual') renderAnnual();
+
+      if (totalCount > 0){
+        const parts = [];
+        if (monthlyCount > 0) parts.push(`월간 ${monthlyCount}개`);
+        if (annualCount > 0) parts.push(`연간 ${annualCount}개`);
+        showToast(`✓ "${file.name}" 연결됨 · ${parts.join(', ')} 불러옴`, 'success');
+      } else {
+        showToast(`✓ "${file.name}" 연결됨 (빈 파일)`, 'success');
+      }
+    } catch(err){
+      if (err.name === 'AbortError') return; // user cancelled
+      console.error(err);
+      alert('파일 연결 중 오류: ' + err.message);
+    }
+  }
+
+  async function disconnectFile(){
+    if (isDirty && fileHandle){
+      if (!confirm('저장되지 않은 변경사항이 있습니다. 연결을 해제하면 엑셀 파일에 반영되지 않아요.\n\n계속하시겠습니까?')) return;
+    }
+    fileHandle = null;
+    try { if (window.idbKeyval) await window.idbKeyval.del(FILE_HANDLE_KEY); }catch(e){}
+    renderFileStatus();
+    showToast('파일 연결 해제됨');
+  }
+
+  async function ensurePermission(handle, mode='readwrite'){
+    if (!handle.queryPermission || !handle.requestPermission) return true;
+    const options = { mode };
+    let perm = await handle.queryPermission(options);
+    if (perm === 'granted') return true;
+    perm = await handle.requestPermission(options);
+    return perm === 'granted';
+  }
+
+  async function saveToConnectedFile(){
+    if (!fileHandle){
+      showToast('먼저 파일을 연결해주세요', 'error');
+      return;
+    }
+    try {
+      const ok = await ensurePermission(fileHandle, 'readwrite');
+      if (!ok){
+        showToast('파일 쓰기 권한이 거부됐습니다', 'error');
+        return;
+      }
+      const buf = buildExcelBuffer();
+      const writable = await fileHandle.createWritable();
+      await writable.write(buf);
+      await writable.close();
+      isDirty = false;
+      renderFileStatus();
+      const now = new Date();
+      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      showToast(`✓ 저장됨 · ${timeStr}`, 'success');
+    } catch(err){
+      console.error(err);
+      if (err.name === 'NotAllowedError'){
+        showToast('파일 접근 권한이 거부됐습니다. 파일을 다시 연결해주세요', 'error', 4000);
+      } else {
+        showToast('저장 실패: ' + err.message, 'error', 4000);
+      }
+    }
+  }
+
+  async function exportAsNewFile(){
+    const monthKeys = Object.keys(monthData).filter(k => (monthData[k].tasks || []).length > 0);
+    const hasAnnual = Object.values(annualData).some(a => a && (a.projects || []).some(p => (p.bars || []).length > 0));
+    if (monthKeys.length === 0 && !hasAnnual){
+      alert('입력된 업무가 없습니다.');
+      return;
+    }
+    const buf = buildExcelBuffer();
+    const writerName = document.getElementById('writer-name').value.trim();
+    const writerDept = document.getElementById('writer-dept').value.trim();
+    // 파일명: {부서}_{이름}.xlsx 형식
+    // 공백/슬래시 등 윈도우 파일명에 문제가 되는 문자 제거
+    const sanitize = s => s.replace(/[\\/:*?"<>|]/g, '').trim();
+    const parts = [sanitize(writerDept), sanitize(writerName)].filter(Boolean);
+    const fname = (parts.length > 0 ? parts.join('_') : '업무일정') + '.xlsx';
+
+    if (FS_API_SUPPORTED){
+      try {
+        const saveOpts = {
+          id: 'kar-excel-folder', // 연결된 파일과 같은 폴더 기억 공유
+          suggestedName: fname,
+          types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }}]
+        };
+        if (fileHandle) saveOpts.startIn = fileHandle;
+        const handle = await window.showSaveFilePicker(saveOpts);
+        const writable = await handle.createWritable();
+        await writable.write(buf);
+        await writable.close();
+        showToast(`✓ 새 파일로 저장됨`, 'success');
+      } catch(err){
+        if (err.name === 'AbortError') return;
+        console.error(err);
+        alert('저장 실패: ' + err.message);
+      }
+    } else {
+      // fallback for other browsers
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname; a.click();
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function renderFileStatus(){
+    const el = document.getElementById('file-status');
+    const saveBtn = document.getElementById('btn-save');
+
+    if (!FS_API_SUPPORTED){
+      el.className = 'file-status is-unsupported';
+      el.innerHTML = `<span class="file-status-icon">⚠</span><span class="file-status-text">이 브라우저는 저장 기능 미지원</span><span class="file-status-name">Chrome/Edge 권장</span>`;
+      document.getElementById('btn-connect').disabled = true;
+      document.getElementById('btn-connect').style.display = 'none';
+      saveBtn.disabled = true;
+      saveBtn.style.display = 'none';
+      return;
+    }
+
+    if (!fileHandle){
+      el.className = 'file-status';
+      el.innerHTML = `<span class="file-status-icon">⊘</span><span class="file-status-text">파일 미연결</span>`;
+      saveBtn.disabled = true;
+      saveBtn.textContent = '💾 저장';
+    } else {
+      el.className = 'file-status is-connected';
+      const name = fileHandle.name || 'file.xlsx';
+      el.innerHTML = `
+        <span class="file-status-icon">●</span>
+        <span class="file-status-text">${isDirty ? '변경됨' : '동기화됨'}</span>
+        <span class="file-status-name" title="${escapeAttr(name)}">${escapeHtml(name)}</span>
+        <button class="disconnect-btn" id="disconnect-btn" title="연결 해제">✕</button>
+      `;
+      document.getElementById('disconnect-btn').addEventListener('click', (e) => { e.stopPropagation(); disconnectFile(); });
+      saveBtn.disabled = !isDirty;
+      saveBtn.textContent = isDirty ? '💾 저장' : '✓ 저장됨';
+    }
+  }
+
+  function updateSaveButtonState(){
+    if (!FS_API_SUPPORTED) return;
+    const saveBtn = document.getElementById('btn-save');
+    if (!fileHandle){
+      saveBtn.disabled = true;
+      return;
+    }
+    saveBtn.disabled = !isDirty;
+    saveBtn.textContent = isDirty ? '💾 저장' : '✓ 저장됨';
+    // Also update status label
+    const statusText = document.querySelector('#file-status .file-status-text');
+    if (statusText) statusText.textContent = isDirty ? '변경됨' : '동기화됨';
+  }
+
+  // ---------- Top bar ----------
+  function renderMonthHeader(){
+    document.getElementById('month-title').textContent = `${currentYear}년 ${currentMonth+1}월`;
+    let label = '업무 계획';
+    if (currentYear === todayY && currentMonth === todayM) label = '이번 달';
+    document.getElementById('month-label').textContent = label;
+    document.getElementById('this-week-chip').textContent = `이번주: ${thisMon.getMonth()+1}/${thisMon.getDate()} - ${thisFri.getMonth()+1}/${thisFri.getDate()} (월~금)`;
+    const {start, end} = getTwRange();
+    document.getElementById('tw-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
+    document.getElementById('all-section-month').textContent = `· ${currentYear}년 ${currentMonth+1}월`;
+  }
+
+  function renderCalendar(){
+    const grid = document.getElementById('calendar');
+    const days = daysInMonth(currentYear, currentMonth);
+    const { rowCount, ordered } = assignRows(getMonth(currentYear,currentMonth).tasks);
+
+    grid.style.gridTemplateColumns = `56px repeat(${days}, minmax(26px, 1fr))`;
+    grid.style.gridTemplateRows = `auto auto repeat(${rowCount}, auto)`;
+    grid.innerHTML = '';
+
+    const corner = document.createElement('div');
+    corner.className = 'cal-corner';
+    corner.textContent = `   일\n달`;
+    grid.appendChild(corner);
+
+    for (let d = 1; d <= days; d++){
+      const el = document.createElement('div');
+      el.className = 'cal-day-num';
+      if (isTodayDay(currentYear,currentMonth,d)) el.classList.add('is-today');
+      else if (isInRange(currentYear,currentMonth,d,thisMon,thisFri)) el.classList.add('is-highlight');
+      el.textContent = d;
+      el.style.gridRow = '1';
+      el.style.gridColumn = String(d+1);
+      grid.appendChild(el);
+    }
+
+    const monthLabel = document.createElement('div');
+    monthLabel.className = 'cal-corner';
+    monthLabel.style.gridColumn = '1';
+    monthLabel.style.gridRow = `2 / span ${1 + rowCount}`;
+    monthLabel.style.fontSize = '15px';
+    monthLabel.style.fontWeight = '700';
+    monthLabel.style.color = 'var(--ink)';
+    monthLabel.style.whiteSpace = 'normal';
+    monthLabel.textContent = `${currentMonth+1}월`;
+    grid.appendChild(monthLabel);
+
+    for (let d = 1; d <= days; d++){
+      const wd = weekdayOf(currentYear,currentMonth,d);
+      const el = document.createElement('div');
+      el.className = 'cal-weekday';
+      if (wd === 0) el.classList.add('is-sun');
+      if (wd === 6) el.classList.add('is-sat');
+      if (isTodayDay(currentYear,currentMonth,d)) el.classList.add('is-today');
+      else if (isInRange(currentYear,currentMonth,d,thisMon,thisFri)) el.classList.add('is-highlight');
+      el.textContent = WEEKDAYS_KR[wd];
+      el.style.gridRow = '2';
+      el.style.gridColumn = String(d+1);
+      grid.appendChild(el);
+    }
+
+    for (let r = 0; r < rowCount; r++){
+      for (let d = 1; d <= days; d++){
+        const bg = document.createElement('div');
+        bg.className = 'cal-bg';
+        const wd = weekdayOf(currentYear,currentMonth,d);
+        if (wd === 0) bg.classList.add('is-sunday');
+        else if (wd === 6) bg.classList.add('is-weekend');
+        if (isInRange(currentYear,currentMonth,d,thisMon,thisFri)) bg.classList.add('is-highlight');
+        bg.style.gridRow = String(3 + r);
+        bg.style.gridColumn = String(d+1);
+        grid.appendChild(bg);
+      }
+    }
+
+    ordered.forEach(t => {
+      const bar = document.createElement('div');
+      bar.className = 'cal-task-bar';
+      if (t.id === focusedTaskId) bar.classList.add('is-focused');
+      const titleStr = t.title || '(제목 없음)';
+      // 15자 이하 짧은 제목은 한 줄로 유지 (펼치기 모드에서만 효과 발휘)
+      if (titleStr.length <= 15) bar.classList.add('is-short-title');
+      bar.textContent = titleStr;
+      bar.title = `${titleStr}\n${currentMonth+1}/${t.start} ~ ${currentMonth+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
+      bar.style.gridRow = String(3 + t._row);
+      bar.style.gridColumn = `${t.start+1} / ${t.end+2}`;
+      bar.addEventListener('click', () => {
+        focusedTaskId = t.id;
+        renderCalendar();
+        openTaskModal(t, currentYear, currentMonth);
+      });
+      grid.appendChild(bar);
+    });
+  }
+
+  function getTasksOverlappingRange(rangeStart, rangeEnd){
+    const results = [];
+    const monthsToCheck = new Set([
+      monthKey(rangeStart.getFullYear(), rangeStart.getMonth()),
+      monthKey(rangeEnd.getFullYear(), rangeEnd.getMonth())
+    ]);
+    monthsToCheck.forEach(key => {
+      if (!monthData[key]) return;
+      const parts = key.split('-');
+      const y = parseInt(parts[0],10);
+      const m = parseInt(parts[1],10) - 1;
+      monthData[key].tasks.forEach(t => {
+        if (taskOverlapsRange(t,y,m,rangeStart,rangeEnd)) results.push({ task:t, y, m, monthKey:key });
+      });
+    });
+    results.sort((a,b) => new Date(a.y,a.m,a.task.start) - new Date(b.y,b.m,b.task.start));
+    return results;
+  }
+
+  function renderThisWeek(){
+    const list = document.getElementById('tw-list');
+    const {start, end, label} = getTwRange();
+    const results = getTasksOverlappingRange(start, end);
+
+    // Update labels / button text that depend on selected week
+    document.getElementById('tw-badge').textContent = `${label} 업무`;
+    document.getElementById('add-tw-task-btn').textContent = `+ ${label} 업무 추가`;
+    document.getElementById('tw-count').textContent = results.length ? `${results.length}건` : '';
+    list.innerHTML = '';
+
+    if (results.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'tw-empty';
+      empty.textContent = `— ${label} 예정 업무가 없습니다. 아래 버튼으로 추가해보세요 —`;
+      list.appendChild(empty);
+      return;
+    }
+
+    results.forEach(({ task, y, m, monthKey: mk }) => {
+      const item = document.createElement('div');
+      item.className = 'tw-item';
+      if (editingTwIds.has(task.id)) item.classList.add('is-editing');
+      item.dataset.id = task.id;
+      const days = daysInMonth(y, m);
+      const startD = new Date(y, m, task.start);
+      const endD = new Date(y, m, task.end);
+      const sameDay = task.start === task.end;
+      const dateStr = sameDay
+        ? `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]})`
+        : `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]}) - ${endD.getMonth()+1}/${endD.getDate()}(${WEEKDAYS_KR[endD.getDay()]})`;
+      item.innerHTML = `
+        <input class="tw-title-input" placeholder="업무 내용" value="${escapeAttr(task.title)}">
+        <div class="tw-dates-cell">
+          <div class="tw-dates">${dateStr}</div>
+          <div class="tw-dates-edit">
+            <input class="tw-day-input tw-day-start" type="number" min="1" max="${days}" value="${task.start}" aria-label="시작일">
+            <span class="tw-dates-sep">-</span>
+            <input class="tw-day-input tw-day-end" type="number" min="1" max="${days}" value="${task.end}" aria-label="종료일">
+          </div>
+        </div>
+        <button class="tw-edit" aria-label="수정" title="수정">${editingTwIds.has(task.id) ? '✓' : '✎'}</button>
+        <button class="task-remove" aria-label="삭제">×</button>
+      `;
+      const titleEl = item.querySelector('.tw-title-input');
+      const editBtn = item.querySelector('.tw-edit');
+      const startInput = item.querySelector('.tw-day-start');
+      const endInput = item.querySelector('.tw-day-end');
+
+      titleEl.addEventListener('input', e => {
+        task.title = e.target.value; saveAllLocal(); renderCalendar();
+        if (allSectionOpen && y === currentYear && m === currentMonth){
+          const twin = document.querySelector(`.task-row[data-id="${task.id}"] .task-title-input`);
+          if (twin && document.activeElement !== twin) twin.value = task.title;
+        }
+      });
+
+      editBtn.addEventListener('click', () => {
+        if (editingTwIds.has(task.id)){
+          exitEditMode();
+        } else {
+          editingTwIds.add(task.id);
+          item.classList.add('is-editing');
+          editBtn.textContent = '✓';
+          editBtn.title = '완료';
+          setTimeout(() => { startInput.focus(); startInput.select(); }, 0);
+        }
+      });
+
+      // 편집 모드 종료 (박스 밖 클릭 또는 ✓ 클릭)
+      const exitEditMode = () => {
+        editingTwIds.delete(task.id);
+        // 재렌더로 항목이 사라질 수 있으므로 renderThisWeek로 통째로 다시 그림
+        renderThisWeek();
+      };
+
+      // 박스 밖을 클릭했을 때 자동 종료
+      item.addEventListener('focusout', () => {
+        // 같은 박스 내부로 포커스가 이동한 건지 확인하려고 setTimeout으로 한 틱 지연
+        setTimeout(() => {
+          if (!editingTwIds.has(task.id)) return; // 이미 종료됨
+          if (item.contains(document.activeElement)) return; // 같은 박스 내부 이동
+          exitEditMode();
+        }, 0);
+      });
+
+      const onDayChange = () => {
+        let s = parseInt(startInput.value,10);
+        let e = parseInt(endInput.value,10);
+        if (!Number.isFinite(s)) s = 1;
+        if (!Number.isFinite(e)) e = s;
+        s = Math.max(1, Math.min(days, s));
+        e = Math.max(s, Math.min(days, e));
+        task.start = s; task.end = e;
+        startInput.value = s; endInput.value = e;
+        saveAllLocal();
+        renderCalendar();
+        // 편집 중에는 tw-list를 재렌더하지 않음 (포커스 손실 방지)
+        // 대신 이 항목의 표시 텍스트만 실시간 업데이트 (편집 종료 후 보여줄 값)
+        const nsd = new Date(y, m, s);
+        const ned = new Date(y, m, e);
+        const dStr = s === e
+          ? `${nsd.getMonth()+1}/${nsd.getDate()}(${WEEKDAYS_KR[nsd.getDay()]})`
+          : `${nsd.getMonth()+1}/${nsd.getDate()}(${WEEKDAYS_KR[nsd.getDay()]}) - ${ned.getMonth()+1}/${ned.getDate()}(${WEEKDAYS_KR[ned.getDay()]})`;
+        const datesView = item.querySelector('.tw-dates');
+        if (datesView) datesView.textContent = dStr;
+        if (allSectionOpen && y === currentYear && m === currentMonth) renderAllTasks();
+      };
+      startInput.addEventListener('change', onDayChange);
+      endInput.addEventListener('change', onDayChange);
+
+      item.querySelector('.task-remove').addEventListener('click', () => {
+        const mdata = monthData[mk];
+        const idx = mdata.tasks.findIndex(x => x.id === task.id);
+        if (idx >= 0) mdata.tasks.splice(idx, 1);
+        editingTwIds.delete(task.id);
+        if (focusedTaskId === task.id) focusedTaskId = null;
+        saveAllLocal();
+        renderCalendar(); renderThisWeek(); renderAllTasks();
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function renderAllTasks(){
+    const list = document.getElementById('task-list');
+    const data = getMonth(currentYear, currentMonth);
+    list.innerHTML = '';
+    const days = daysInMonth(currentYear, currentMonth);
+
+    document.getElementById('all-count').textContent = data.tasks.length ? `${data.tasks.length}건` : '';
+
+    if (data.tasks.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'task-empty';
+      empty.textContent = '이번 달에 등록된 업무가 없습니다. 아래 버튼으로 추가해보세요.';
+      list.appendChild(empty);
+      return;
+    }
+
+    data.tasks.forEach((t, idx) => {
+      const row = document.createElement('div');
+      row.className = 'task-row';
+      row.dataset.id = t.id;
+      if (t.id === focusedTaskId) row.classList.add('is-focused');
+      if (t.start < 1 || t.start > days || t.end < t.start || t.end > days) row.classList.add('is-invalid');
+      row.innerHTML = `
+        <input class="task-title-input" placeholder="업무 내용" value="${escapeAttr(t.title)}">
+        <input class="task-day-input task-start" type="number" min="1" max="${days}" value="${t.start}">
+        <input class="task-day-input task-end" type="number" min="1" max="${days}" value="${t.end}">
+        <button class="task-remove" aria-label="삭제">×</button>
+      `;
+      const titleEl = row.querySelector('.task-title-input');
+      const startEl = row.querySelector('.task-start');
+      const endEl = row.querySelector('.task-end');
+      titleEl.addEventListener('input', e => {
+        t.title = e.target.value; saveAllLocal(); renderCalendar();
+        const {start, end} = getTwRange();
+        if (taskOverlapsRange(t, currentYear, currentMonth, start, end)){
+          const twin = document.querySelector(`.tw-item[data-id="${t.id}"] .tw-title-input`);
+          if (twin && document.activeElement !== twin) twin.value = t.title;
+        }
+      });
+      const onDayChange = () => {
+        let s = parseInt(startEl.value,10);
+        let e = parseInt(endEl.value,10);
+        if (!Number.isFinite(s)) s = 1;
+        if (!Number.isFinite(e)) e = s;
+        s = Math.max(1, Math.min(days, s));
+        e = Math.max(s, Math.min(days, e));
+        t.start = s; t.end = e;
+        startEl.value = s; endEl.value = e;
+        saveAllLocal();
+        renderCalendar(); renderThisWeek();
+        row.classList.remove('is-invalid');
+      };
+      startEl.addEventListener('change', onDayChange);
+      endEl.addEventListener('change', onDayChange);
+      [titleEl,startEl,endEl].forEach(el => {
+        el.addEventListener('focus', () => { focusedTaskId = t.id; renderCalendar(); highlightFocusedRow(t.id); });
+      });
+      row.querySelector('.task-remove').addEventListener('click', () => {
+        data.tasks.splice(idx,1);
+        editingTwIds.delete(t.id);
+        if (focusedTaskId === t.id) focusedTaskId = null;
+        saveAllLocal(); renderCalendar(); renderThisWeek(); renderAllTasks();
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function highlightFocusedRow(id){
+    document.querySelectorAll('.task-row').forEach(r => {
+      r.classList.toggle('is-focused', r.dataset.id === id);
+    });
+  }
+
+  function toggleAllSection(open){
+    allSectionOpen = typeof open === 'boolean' ? open : !allSectionOpen;
+    const btn = document.getElementById('all-toggle');
+    const content = document.getElementById('all-content');
+    btn.classList.toggle('is-open', allSectionOpen);
+    btn.setAttribute('aria-expanded', String(allSectionOpen));
+    content.hidden = !allSectionOpen;
+    if (allSectionOpen) renderAllTasks();
+  }
+
+  function addTaskToCurrentMonth(){
+    const data = getMonth(currentYear, currentMonth);
+    const days = daysInMonth(currentYear, currentMonth);
+    let start = 1, end = 1;
+    if (currentYear === thisMon.getFullYear() && currentMonth === thisMon.getMonth()){
+      start = thisMon.getDate();
+      end = (thisFri.getMonth() === currentMonth) ? thisFri.getDate() : days;
+    } else if (currentYear === todayY && currentMonth === todayM){
+      start = todayD; end = todayD;
+    }
+    const t = { id: uid(), title: '', start, end };
+    data.tasks.push(t);
+    focusedTaskId = t.id;
+    saveAllLocal();
+    if (!allSectionOpen) toggleAllSection(true);
+    renderCalendar(); renderThisWeek(); renderAllTasks();
+    setTimeout(() => {
+      const el = document.querySelector(`.task-row[data-id="${t.id}"] .task-title-input`);
+      if (el){ el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'}); }
+    },50);
+  }
+
+  function addThisWeekTask(){
+    const {start: weekStart, end: weekEnd} = getTwRange();
+    const y = weekStart.getFullYear();
+    const m = weekStart.getMonth();
+    const days = daysInMonth(y,m);
+    const start = weekStart.getDate();
+    // If the week spans two months, clip end to this month's last day
+    const end = (weekEnd.getMonth() === m) ? weekEnd.getDate() : days;
+    const data = getMonth(y, m);
+    const t = { id: uid(), title: '', start, end };
+    data.tasks.push(t);
+    focusedTaskId = t.id;
+    saveAllLocal();
+    if (twCollapsed) setTwCollapsed(false); // 추가 시 자동으로 펼침
+    renderCalendar(); renderThisWeek();
+    if (allSectionOpen && y === currentYear && m === currentMonth) renderAllTasks();
+    setTimeout(() => {
+      const el = document.querySelector(`.tw-item[data-id="${t.id}"] .tw-title-input`);
+      if (el){ el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'}); }
+    },50);
+  }
+
+  // ---------- Excel Import ----------
+  // 시트가 월간(1~31일 헤더), 연간(1~52 주 순), 또는 unknown 인지 판별.
+  function detectSheetKind(ws){
+    if (!ws || !ws['!ref']) return 'unknown';
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    // 연간 시그니처: R4(인덱스 3)에 1~52 연속 숫자 40개 이상
+    let annualMatches = 0;
+    const maxCol = Math.min(60, range.e.c);
+    for (let c = 1; c <= maxCol; c++){
+      const cell = ws[XLSX.utils.encode_cell({r: 3, c})];
+      if (cell && typeof cell.v === 'number' && cell.v === c) annualMatches++;
+    }
+    if (annualMatches >= 40) return 'annual';
+    // 월간 시그니처: 상단 몇 행 내에 1~31 연속 숫자 20개 이상
+    const scanEnd = Math.min(range.s.r + 6, range.e.r);
+    for (let r = range.s.r; r <= scanEnd; r++){
+      let m = 0;
+      for (let c = 1; c <= 31 && c <= range.e.c; c++){
+        const cell = ws[XLSX.utils.encode_cell({r, c})];
+        if (cell && typeof cell.v === 'number' && cell.v === c) m++;
+      }
+      if (m >= 20) return 'monthly';
+    }
+    return 'unknown';
+  }
+
+  function tryImportExcel(arrayBuffer, filename){
+    const result = { monthly: { parsed: {}, count: 0, sheet: null }, annual: { parsed: null, count: 0, sheet: null } };
+    try {
+      const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+      for (const sheetName of wb.SheetNames){
+        const ws = wb.Sheets[sheetName];
+        const kind = detectSheetKind(ws);
+        if (kind === 'monthly'){
+          const parsed = parseMonthlyCalendar(ws);
+          const count = Object.values(parsed).reduce((s,arr) => s+arr.length, 0);
+          if (count > result.monthly.count){ result.monthly = { parsed, count, sheet: sheetName }; }
+        } else if (kind === 'annual'){
+          const annual = parseAnnualCalendar(ws);
+          const count = annual ? annual.projects.reduce((s,p) => s + (p.bars||[]).length, 0) : 0;
+          if (annual && count >= result.annual.count){ result.annual = { parsed: annual, count, sheet: sheetName }; }
+        }
+      }
+    } catch(err){
+      console.warn('Import failed:', err);
+    }
+    return result;
+  }
+
+  function parseMonthlyCalendar(ws){
+    if (!ws || !ws['!ref']) return {};
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const merges = (ws['!merges'] || []);
+
+    let year = new Date().getFullYear();
+    for (let r = range.s.r; r <= Math.min(range.s.r+5, range.e.r); r++){
+      for (let c = range.s.c; c <= range.e.c; c++){
+        const cell = ws[XLSX.utils.encode_cell({r,c})];
+        if (cell && typeof cell.v === 'string'){
+          const m = cell.v.match(/(\d{4})\s*년/);
+          if (m){ year = parseInt(m[1],10); break; }
+        }
+      }
+    }
+
+    let dayRowIdx = -1;
+    for (let r = range.s.r; r <= range.e.r; r++){
+      let matches = 0;
+      for (let c = 1; c <= 31 && c <= range.e.c; c++){
+        const cell = ws[XLSX.utils.encode_cell({r,c})];
+        if (cell && typeof cell.v === 'number' && cell.v === c) matches++;
+      }
+      if (matches >= 20){ dayRowIdx = r; break; }
+    }
+    if (dayRowIdx === -1) return {};
+
+    const monthStarts = [];
+    for (let r = dayRowIdx + 1; r <= range.e.r; r++){
+      const cell = ws[XLSX.utils.encode_cell({r, c: 0})];
+      if (cell && typeof cell.v === 'string'){
+        const m = cell.v.match(/(\d{1,2})\s*월/);
+        if (m){
+          const mn = parseInt(m[1],10);
+          if (mn >= 1 && mn <= 12) monthStarts.push({ row: r, month: mn - 1 });
+        }
+      }
+    }
+    if (monthStarts.length === 0) return {};
+
+    monthStarts.forEach((ms, i) => {
+      const merge = merges.find(mg => mg.s.r === ms.row && mg.s.c === 0);
+      if (merge){ ms.endRow = merge.e.r; }
+      else if (i + 1 < monthStarts.length){ ms.endRow = monthStarts[i+1].row - 1; }
+      else { ms.endRow = range.e.r; }
+    });
+
+    const result = {};
+    let curYear = year;
+    let prevMonth = null;
+    monthStarts.forEach(ms => {
+      // 월 번호가 이전 월보다 작아지면 연도가 롤오버된 것으로 간주
+      if (prevMonth !== null && ms.month < prevMonth) curYear += 1;
+      const key = `${curYear}-${pad(ms.month+1)}`;
+      if (!result[key]) result[key] = [];
+      for (let r = ms.row + 1; r <= ms.endRow; r++){
+        for (let c = 1; c <= 31 && c <= range.e.c; c++){
+          const cell = ws[XLSX.utils.encode_cell({r,c})];
+          if (!cell || cell.v === undefined || cell.v === null) continue;
+          const val = typeof cell.v === 'string' ? cell.v.trim() : String(cell.v).trim();
+          if (!val) continue;
+          if (WEEKDAYS_KR.includes(val)) continue;
+          const merge = merges.find(mg => mg.s.r === r && mg.s.c === c);
+          const endCol = merge ? merge.e.c : c;
+          if (!merge){
+            const insideMerge = merges.find(mg => mg.s.r === r && mg.s.c < c && mg.e.c >= c);
+            if (insideMerge) continue;
+          }
+          const startDay = c;
+          const endDay = Math.min(endCol, 31);
+          if (startDay < 1 || startDay > 31) continue;
+          // 셀 코멘트를 notes로 추출
+          const noteText = (cell.c && cell.c.length)
+            ? cell.c.map(cm => (cm.t || '')).join('\n').trim()
+            : '';
+          result[key].push({ title: val, start: startDay, end: endDay, notes: noteText });
+        }
+      }
+      prevMonth = ms.month;
+    });
+
+    return result;
+  }
+
+  function parseAnnualCalendar(ws){
+    if (!ws || !ws['!ref']) return null;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const merges = (ws['!merges'] || []);
+
+    // (1) R1~R5 안에서 "YYYY년" 탐색 → year + title
+    let year = new Date().getFullYear();
+    let title = '';
+    for (let r = range.s.r; r <= Math.min(range.s.r+4, range.e.r); r++){
+      for (let c = range.s.c; c <= range.e.c; c++){
+        const cell = ws[XLSX.utils.encode_cell({r,c})];
+        if (cell && typeof cell.v === 'string'){
+          const m = cell.v.match(/(\d{4})\s*년/);
+          if (m){ year = parseInt(m[1],10); title = cell.v; break; }
+        }
+      }
+      if (title) break;
+    }
+    if (!title) title = `${year}년 연구 개발 계획`;
+
+    // (2) R4 (index 3) 에서 1..N 연속 주 순 읽어 totalWeeks 결정
+    let totalWeeks = 0;
+    for (let c = 1; c <= range.e.c; c++){
+      const cell = ws[XLSX.utils.encode_cell({r: 3, c})];
+      if (cell && typeof cell.v === 'number' && cell.v === c) totalWeeks = c;
+      else break;
+    }
+    if (totalWeeks < 20) return null; // 형식 불일치
+
+    // (3) R2 (index 1) 월 레이블 + 병합 범위 → monthWeeks
+    const monthWeeks = [];
+    for (let c = 1; c <= totalWeeks; c++){
+      const cell = ws[XLSX.utils.encode_cell({r: 1, c})];
+      if (!cell || cell.v === undefined || cell.v === null) continue;
+      let monthNum = null;
+      if (typeof cell.v === 'number') monthNum = cell.v;
+      else {
+        const s = String(cell.v).trim();
+        const m = s.match(/(\d{1,2})/);
+        if (m) monthNum = parseInt(m[1], 10);
+      }
+      if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) continue;
+      const merge = merges.find(mg => mg.s.r === 1 && mg.s.c === c);
+      const endCol = merge ? merge.e.c : c;
+      monthWeeks.push({ month: monthNum, startCol: c, endCol: Math.min(endCol, totalWeeks), weekCount: Math.min(endCol, totalWeeks) - c + 1 });
+    }
+    // 12개월이 다 안 찼으면 균등 분할 fallback
+    if (monthWeeks.length < 12){
+      const fb = defaultMonthWeeks();
+      if (totalWeeks === 52){ /* 기본값 그대로 */ } else {
+        // totalWeeks가 52가 아닌 경우 균등 분할 재계산
+        const per = Math.floor(totalWeeks / 12);
+        let col = 1;
+        fb.length = 0;
+        for (let i = 0; i < 12; i++){
+          const wc = per + ((i < totalWeeks % 12) ? 1 : 0);
+          fb.push({ month: i+1, startCol: col, endCol: col + wc - 1, weekCount: wc });
+          col += wc;
+        }
+      }
+      // 파싱된 부분은 우선 사용, 빈 월은 fallback으로 채움
+      const filled = new Map(monthWeeks.map(mw => [mw.month, mw]));
+      fb.forEach(mw => { if (!filled.has(mw.month)) monthWeeks.push(mw); });
+      monthWeeks.sort((a,b) => a.month - b.month);
+    }
+
+    // (4) R5부터 프로젝트 행: A열 숫자가 행 번호. 각 행의 병합 범위별로 바 추출
+    const projects = [];
+    for (let r = 4; r <= range.e.r; r++){
+      const labelCell = ws[XLSX.utils.encode_cell({r, c: 0})];
+      if (!labelCell || labelCell.v === undefined || labelCell.v === null) continue;
+      let rowIndex = null;
+      if (typeof labelCell.v === 'number') rowIndex = labelCell.v;
+      else {
+        const s = String(labelCell.v).trim();
+        const m = s.match(/^\d+/);
+        if (m) rowIndex = parseInt(m[0], 10);
+      }
+      if (!Number.isFinite(rowIndex)) continue;
+
+      const bars = [];
+      for (let c = 1; c <= totalWeeks; c++){
+        const cell = ws[XLSX.utils.encode_cell({r, c})];
+        if (!cell || cell.v === undefined || cell.v === null) continue;
+        const val = typeof cell.v === 'string' ? cell.v.trim() : String(cell.v).trim();
+        if (!val) continue;
+        const merge = merges.find(mg => mg.s.r === r && mg.s.c === c);
+        const endCol = merge ? merge.e.c : c;
+        if (!merge){
+          const inside = merges.find(mg => mg.s.r === r && mg.s.c < c && mg.e.c >= c);
+          if (inside) continue;
+        }
+        const noteText = (cell.c && cell.c.length)
+          ? cell.c.map(cm => (cm.t || '')).join('\n').trim()
+          : '';
+        bars.push({
+          id: barUid(),
+          startWeek: c,
+          endWeek: Math.min(endCol, totalWeeks),
+          title: val,
+          notes: noteText
+        });
+      }
+
+      projects.push({ id: projUid(), rowIndex, bars });
+    }
+
+    return { year, title, totalWeeks, monthWeeks, projects };
+  }
+
+  // ---------- Excel Export ----------
+  function buildMonthlySheet(){
+    const writer = {
+      name: document.getElementById('writer-name').value.trim(),
+      dept: document.getElementById('writer-dept').value.trim()
+    };
+    const MAX_DAYS = 31;
+    const monthKeys = Object.keys(monthData).filter(k => (monthData[k].tasks || []).length > 0).sort();
+
+    const rows = [];
+    const merges = [];
+    const cellNotesToAdd = [];
+
+    const title = writer.name ? `업무 일정 및 계획 (${writer.dept||''}${writer.dept?' · ':''}${writer.name})` : '업무 일정 및 계획';
+    const titleRow = [title];
+    for (let i = 0; i < MAX_DAYS; i++) titleRow.push('');
+    rows.push(titleRow);
+    merges.push({s:{r:0,c:0},e:{r:0,c:MAX_DAYS}});
+
+    const header = ['        일\n달'];
+    for (let d = 1; d <= MAX_DAYS; d++) header.push(d);
+    rows.push(header);
+
+    monthKeys.forEach(key => {
+      const parts = key.split('-');
+      const y = parseInt(parts[0],10);
+      const m = parseInt(parts[1],10) - 1;
+      const days = daysInMonth(y,m);
+      const { rowCount, ordered } = assignRows([...monthData[key].tasks]);
+
+      const monthStartRowIdx = rows.length;
+
+      const wdRow = [`${m+1}월`];
+      for (let d = 1; d <= MAX_DAYS; d++){
+        wdRow.push(d <= days ? WEEKDAYS_KR[weekdayOf(y,m,d)] : '');
+      }
+      rows.push(wdRow);
+
+      const taskRows = [];
+      for (let r = 0; r < rowCount; r++){
+        const row = [''];
+        for (let d = 0; d < MAX_DAYS; d++) row.push('');
+        taskRows.push(row);
+      }
+      ordered.forEach(t => { taskRows[t._row][t.start] = t.title || ''; });
+      taskRows.forEach(r => rows.push(r));
+
+      merges.push({s:{r:monthStartRowIdx,c:0},e:{r:monthStartRowIdx + rowCount, c:0}});
+      ordered.forEach(t => {
+        if (t.end > t.start){
+          merges.push({
+            s:{r: monthStartRowIdx + 1 + t._row, c: t.start},
+            e:{r: monthStartRowIdx + 1 + t._row, c: t.end}
+          });
+        }
+        if (t.notes && t.notes.trim()){
+          cellNotesToAdd.push({
+            r: monthStartRowIdx + 1 + t._row,
+            c: t.start,
+            text: t.notes
+          });
+        }
+      });
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!merges'] = merges;
+    const cols = [{wch:10}];
+    for (let i = 0; i < MAX_DAYS; i++) cols.push({wch:4.5});
+    ws['!cols'] = cols;
+
+    cellNotesToAdd.forEach(({r, c, text}) => {
+      const addr = XLSX.utils.encode_cell({r, c});
+      if (ws[addr]){
+        ws[addr].c = [{ a: 'KAR 일정', t: text }];
+      }
+    });
+
+    return ws;
+  }
+
+  function buildAnnualSheet(annual){
+    const totalCols = annual.totalWeeks || 52;
+    const rows = [];
+    const merges = [];
+    const cellNotesToAdd = [];
+
+    // R1: 타이틀 (A1:??1 병합)
+    const titleRow = [annual.title || `${annual.year}년 연구 개발 계획`];
+    for (let i = 0; i < totalCols; i++) titleRow.push('');
+    rows.push(titleRow);
+    merges.push({ s:{r:0,c:0}, e:{r:0, c: totalCols} });
+
+    // R2: 월 레이블
+    const r2 = ['월'];
+    for (let i = 0; i < totalCols; i++) r2.push('');
+    annual.monthWeeks.forEach(mw => {
+      r2[mw.startCol] = mw.month;
+      if (mw.endCol > mw.startCol){
+        merges.push({ s:{r:1,c:mw.startCol}, e:{r:1,c:mw.endCol} });
+      }
+    });
+    rows.push(r2);
+
+    // R3: 월 내 주 번호
+    const r3 = ['주'];
+    for (let i = 0; i < totalCols; i++) r3.push('');
+    annual.monthWeeks.forEach(mw => {
+      for (let w = 1; w <= mw.weekCount; w++){
+        r3[mw.startCol + w - 1] = w;
+      }
+    });
+    rows.push(r3);
+
+    // R4: 연속 주 순 1..totalCols
+    const r4 = ['    주\n순'];
+    for (let w = 1; w <= totalCols; w++) r4.push(w);
+    rows.push(r4);
+
+    // R5~: 프로젝트 행
+    annual.projects.forEach((p, idx) => {
+      const rowIdx = 4 + idx;
+      const rowArr = [p.rowIndex];
+      for (let i = 0; i < totalCols; i++) rowArr.push('');
+      (p.bars || []).forEach(bar => {
+        const sw = Math.max(1, Math.min(totalCols, bar.startWeek));
+        const ew = Math.max(sw, Math.min(totalCols, bar.endWeek));
+        rowArr[sw] = bar.title || '';
+        if (ew > sw){
+          merges.push({ s:{r:rowIdx, c:sw}, e:{r:rowIdx, c:ew} });
+        }
+        if (bar.notes && bar.notes.trim()){
+          cellNotesToAdd.push({ r: rowIdx, c: sw, text: bar.notes });
+        }
+      });
+      rows.push(rowArr);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!merges'] = merges;
+    const cols = [{ wch: 6 }];
+    for (let i = 0; i < totalCols; i++) cols.push({ wch: 3.5 });
+    ws['!cols'] = cols;
+
+    cellNotesToAdd.forEach(({ r, c, text }) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (ws[addr]){
+        ws[addr].c = [{ a: 'KAR 일정', t: text }];
+      }
+    });
+
+    return ws;
+  }
+
+  function buildExcelBuffer(){
+    const wb = XLSX.utils.book_new();
+    const monthKeys = Object.keys(monthData).filter(k => (monthData[k].tasks || []).length > 0);
+    const hasMonthly = monthKeys.length > 0;
+
+    // 연간 데이터가 있는 연도들 (바가 하나라도 있는 것만)
+    const annualYears = Object.keys(annualData).filter(k => {
+      const a = annualData[k];
+      return a && (a.projects || []).some(p => (p.bars || []).length > 0);
+    });
+    // 현재 선택된 연도를 우선 사용. 없으면 첫 번째.
+    let annualToWrite = null;
+    if (annualData[String(currentAnnualYear)] && (annualData[String(currentAnnualYear)].projects || []).some(p => (p.bars || []).length > 0)){
+      annualToWrite = annualData[String(currentAnnualYear)];
+    } else if (annualYears.length > 0){
+      annualToWrite = annualData[annualYears[0]];
+    }
+
+    if (annualToWrite){
+      XLSX.utils.book_append_sheet(wb, buildAnnualSheet(annualToWrite), 'Sheet1');
+    }
+    if (hasMonthly){
+      XLSX.utils.book_append_sheet(wb, buildMonthlySheet(), 'Sheet2');
+    }
+    // 양쪽 다 없으면 빈 Sheet2 (기존 동작 유지)
+    if (!annualToWrite && !hasMonthly){
+      XLSX.utils.book_append_sheet(wb, buildMonthlySheet(), 'Sheet2');
+    }
+
+    return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  }
+
+  // ---------- Briefing view ----------
+  function renderBriefing(){
+    const writer = {
+      name: document.getElementById('writer-name').value.trim(),
+      dept: document.getElementById('writer-dept').value.trim()
+    };
+    document.getElementById('briefing-dept').textContent = [writer.dept, writer.name].filter(Boolean).join(' · ') || '업무 브리핑';
+    const {start, end, label} = getBriefingWeekRange();
+    document.getElementById('briefing-week-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
+    document.getElementById('briefing-month').textContent = `${briefingYear}년 ${briefingMonth+1}월`;
+    document.getElementById('briefing-week-label').textContent = `${label} 업무`;
+    document.getElementById('briefing-week-range-full').textContent = `${start.getFullYear()}. ${start.getMonth()+1}. ${start.getDate()} (월) — ${end.getFullYear()}. ${end.getMonth()+1}. ${end.getDate()} (금)`;
+    document.querySelectorAll('.week-toggle-btn').forEach(btn => {
+      btn.classList.toggle('is-active', btn.dataset.week === briefingWeek);
+    });
+    renderBriefingCalendar();
+    renderBriefingWeekList();
+  }
+
+  function renderBriefingCalendar(){
+    const grid = document.getElementById('briefing-calendar');
+    const days = daysInMonth(briefingYear, briefingMonth);
+    const { rowCount, ordered } = assignRows(getMonth(briefingYear, briefingMonth).tasks);
+    const {start, end} = getBriefingWeekRange();
+
+    grid.style.gridTemplateColumns = `68px repeat(${days}, minmax(30px, 1fr))`;
+    grid.style.gridTemplateRows = `auto auto repeat(${rowCount}, auto)`;
+    grid.innerHTML = '';
+
+    const corner = document.createElement('div');
+    corner.className = 'cal-corner';
+    corner.textContent = `   일\n달`;
+    grid.appendChild(corner);
+
+    for (let d = 1; d <= days; d++){
+      const el = document.createElement('div');
+      el.className = 'cal-day-num';
+      if (isTodayDay(briefingYear,briefingMonth,d)) el.classList.add('is-today');
+      else if (isInRange(briefingYear,briefingMonth,d,start,end)) el.classList.add('is-highlight');
+      el.textContent = d;
+      el.style.gridRow = '1';
+      el.style.gridColumn = String(d+1);
+      grid.appendChild(el);
+    }
+
+    const monthLabel = document.createElement('div');
+    monthLabel.className = 'cal-corner';
+    monthLabel.style.gridColumn = '1';
+    monthLabel.style.gridRow = `2 / span ${1 + rowCount}`;
+    monthLabel.style.fontSize = '18px';
+    monthLabel.style.fontWeight = '700';
+    monthLabel.style.color = '#f5f2ea';
+    monthLabel.textContent = `${briefingMonth+1}월`;
+    grid.appendChild(monthLabel);
+
+    for (let d = 1; d <= days; d++){
+      const wd = weekdayOf(briefingYear,briefingMonth,d);
+      const el = document.createElement('div');
+      el.className = 'cal-weekday';
+      if (wd === 0) el.classList.add('is-sun');
+      if (wd === 6) el.classList.add('is-sat');
+      if (isTodayDay(briefingYear,briefingMonth,d)) el.classList.add('is-today');
+      else if (isInRange(briefingYear,briefingMonth,d,start,end)) el.classList.add('is-highlight');
+      el.textContent = WEEKDAYS_KR[wd];
+      el.style.gridRow = '2';
+      el.style.gridColumn = String(d+1);
+      grid.appendChild(el);
+    }
+
+    for (let r = 0; r < rowCount; r++){
+      for (let d = 1; d <= days; d++){
+        const bg = document.createElement('div');
+        bg.className = 'cal-bg';
+        const wd = weekdayOf(briefingYear,briefingMonth,d);
+        if (wd === 0) bg.classList.add('is-sunday');
+        else if (wd === 6) bg.classList.add('is-weekend');
+        if (isInRange(briefingYear,briefingMonth,d,start,end)) bg.classList.add('is-highlight');
+        bg.style.gridRow = String(3 + r);
+        bg.style.gridColumn = String(d+1);
+        grid.appendChild(bg);
+      }
+    }
+
+    ordered.forEach(t => {
+      const bar = document.createElement('div');
+      bar.className = 'cal-task-bar';
+      if (taskOverlapsRange(t, briefingYear, briefingMonth, start, end)) bar.classList.add('is-highlight-task');
+      bar.textContent = t.title || '(제목 없음)';
+      bar.title = `${t.title || '(제목 없음)'}${t.notes ? '\n\n' + t.notes : ''}\n(클릭해서 상세 보기)`;
+      bar.style.gridRow = String(3 + t._row);
+      bar.style.gridColumn = `${t.start+1} / ${t.end+2}`;
+      bar.addEventListener('click', () => openTaskModal(t, briefingYear, briefingMonth));
+      grid.appendChild(bar);
+    });
+  }
+
+  function renderBriefingWeekList(){
+    const listEl = document.getElementById('briefing-week-list');
+    listEl.innerHTML = '';
+    const {start, end} = getBriefingWeekRange();
+    const results = getTasksOverlappingRange(start, end);
+
+    if (results.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'briefing-week-empty';
+      empty.textContent = '— 해당 주에 예정된 업무 없음 —';
+      listEl.appendChild(empty);
+      return;
+    }
+
+    results.forEach(({ task: t, y, m }) => {
+      const item = document.createElement('div');
+      item.className = 'briefing-week-item';
+      const taskStart = new Date(y, m, t.start);
+      const taskEnd = new Date(y, m, t.end);
+      const effStart = taskStart > start ? taskStart : start;
+      const effEnd = taskEnd < end ? taskEnd : end;
+      const sameDay = fmtISO(effStart) === fmtISO(effEnd);
+      const range = sameDay
+        ? `${effStart.getMonth()+1}/${effStart.getDate()} (${WEEKDAYS_KR[effStart.getDay()]})`
+        : `${effStart.getMonth()+1}/${effStart.getDate()}(${WEEKDAYS_KR[effStart.getDay()]}) - ${effEnd.getMonth()+1}/${effEnd.getDate()}(${WEEKDAYS_KR[effEnd.getDay()]})`;
+      item.innerHTML = `
+        <div class="briefing-week-days">${range}</div>
+        <div>
+          <div class="briefing-week-title">${escapeHtml(t.title) || '(제목 없음)'}</div>
+          ${t.notes ? `<div class="briefing-week-notes">${escapeHtml(t.notes)}</div>` : ''}
+        </div>
+      `;
+      item.style.cursor = 'pointer';
+      item.title = '클릭해서 상세 보기';
+      item.addEventListener('click', () => openTaskModal(t, y, m));
+      listEl.appendChild(item);
+    });
+  }
+
+  function setBriefingWeek(week){
+    briefingWeek = week;
+    const {start} = getBriefingWeekRange();
+    briefingYear = start.getFullYear();
+    briefingMonth = start.getMonth();
+    renderBriefing();
+  }
+
+  function enterBriefing(){
+    briefingWeek = 'this';
+    briefingYear = thisMon.getFullYear();
+    briefingMonth = thisMon.getMonth();
+    renderBriefing();
+    document.body.classList.add('briefing-active');
+    document.getElementById('briefing-view').hidden = false;
+  }
+  function exitBriefing(){
+    document.body.classList.remove('briefing-active');
+    document.getElementById('briefing-view').hidden = true;
+  }
+
+  // ---------- Task Detail Modal ----------
+  let modalCtx = null; // { task, y, m }
+
+  function openTaskModal(task, y, m){
+    modalCtx = { task, y, m };
+    const days = daysInMonth(y, m);
+    const titleInput = document.getElementById('modal-title-input');
+    const startInput = document.getElementById('modal-start-input');
+    const endInput = document.getElementById('modal-end-input');
+    const notesInput = document.getElementById('modal-notes-input');
+    titleInput.value = task.title || '';
+    startInput.min = 1; startInput.max = days; startInput.value = task.start;
+    endInput.min = 1; endInput.max = days; endInput.value = task.end;
+    notesInput.value = task.notes || '';
+    updateModalDatesDisplay();
+    document.getElementById('task-modal').classList.add('is-open');
+    setTimeout(() => titleInput.focus(), 50);
+  }
+
+  function closeTaskModal(){
+    document.getElementById('task-modal').classList.remove('is-open');
+    modalCtx = null;
+  }
+
+  function updateModalDatesDisplay(){
+    if (!modalCtx) return;
+    const { y, m } = modalCtx;
+    const s = parseInt(document.getElementById('modal-start-input').value, 10);
+    const e = parseInt(document.getElementById('modal-end-input').value, 10);
+    if (!Number.isFinite(s) || !Number.isFinite(e)) return;
+    const sd = new Date(y, m, s);
+    const ed = new Date(y, m, e);
+    const display = s === e
+      ? `${m+1}/${s} (${WEEKDAYS_KR[sd.getDay()]})`
+      : `${m+1}/${s}(${WEEKDAYS_KR[sd.getDay()]}) - ${m+1}/${e}(${WEEKDAYS_KR[ed.getDay()]})`;
+    document.getElementById('modal-dates-display').textContent = display;
+  }
+
+  // Modal input wiring
+  function syncModalChanges(){
+    saveAllLocal();
+    renderCalendar();
+    renderThisWeek();
+    if (allSectionOpen) renderAllTasks();
+    // 브리핑 뷰가 보이는 상태면 그것도 갱신
+    if (!document.getElementById('briefing-view').hidden) renderBriefing();
+  }
+  document.getElementById('modal-title-input').addEventListener('input', (e) => {
+    if (!modalCtx) return;
+    modalCtx.task.title = e.target.value;
+    syncModalChanges();
+  });
+  document.getElementById('modal-notes-input').addEventListener('input', (e) => {
+    if (!modalCtx) return;
+    modalCtx.task.notes = e.target.value;
+    saveAllLocal();
+    // 브리핑 뷰에서 메모가 바로 보이도록 갱신
+    if (!document.getElementById('briefing-view').hidden) renderBriefing();
+  });
+  const modalOnDateChange = () => {
+    if (!modalCtx) return;
+    const { task, y, m } = modalCtx;
+    const days = daysInMonth(y, m);
+    const startEl = document.getElementById('modal-start-input');
+    const endEl = document.getElementById('modal-end-input');
+    let s = parseInt(startEl.value, 10);
+    let e = parseInt(endEl.value, 10);
+    if (!Number.isFinite(s)) s = 1;
+    if (!Number.isFinite(e)) e = s;
+    s = Math.max(1, Math.min(days, s));
+    e = Math.max(s, Math.min(days, e));
+    task.start = s; task.end = e;
+    startEl.value = s; endEl.value = e;
+    syncModalChanges();
+    updateModalDatesDisplay();
+  };
+  document.getElementById('modal-start-input').addEventListener('change', modalOnDateChange);
+  document.getElementById('modal-end-input').addEventListener('change', modalOnDateChange);
+
+  document.getElementById('modal-close-btn').addEventListener('click', closeTaskModal);
+  document.getElementById('modal-save-btn').addEventListener('click', () => {
+    closeTaskModal();
+    showToast('✓ 저장됨', 'success', 1500);
+  });
+  document.getElementById('modal-delete-btn').addEventListener('click', () => {
+    if (!modalCtx) return;
+    const { task, y, m } = modalCtx;
+    const titleSnippet = task.title ? `"${task.title}"` : '(제목 없는) 업무';
+    if (!confirm(`${titleSnippet}를 삭제하시겠습니까?`)) return;
+    const key = monthKey(y, m);
+    const data = monthData[key];
+    if (data){
+      const idx = data.tasks.findIndex(t => t.id === task.id);
+      if (idx >= 0) data.tasks.splice(idx, 1);
+    }
+    editingTwIds.delete(task.id);
+    if (focusedTaskId === task.id) focusedTaskId = null;
+    saveAllLocal();
+    closeTaskModal();
+    renderCalendar();
+    renderThisWeek();
+    if (allSectionOpen) renderAllTasks();
+    if (!document.getElementById('briefing-view').hidden) renderBriefing();
+  });
+  // Click outside to close
+  document.getElementById('task-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'task-modal') closeTaskModal();
+  });
+
+  // ---------- Annual Bar Modal ----------
+  let annualModalCtx = null; // { project, bar, annual }
+
+  function weekToMonthWeek(annual, week){
+    for (const mw of annual.monthWeeks){
+      if (week >= mw.startCol && week <= mw.endCol){
+        return { month: mw.month, weekInMonth: week - mw.startCol + 1 };
+      }
+    }
+    return null;
+  }
+  function monthWeekToWeek(annual, month, weekInMonth){
+    const mw = annual.monthWeeks.find(x => x.month === month);
+    if (!mw) return null;
+    const clamped = Math.max(1, Math.min(mw.weekCount, weekInMonth));
+    return mw.startCol + clamped - 1;
+  }
+
+  function populateMonthSelect(selEl, annual){
+    selEl.innerHTML = '';
+    annual.monthWeeks.forEach(mw => {
+      const opt = document.createElement('option');
+      opt.value = String(mw.month);
+      opt.textContent = `${mw.month}월`;
+      selEl.appendChild(opt);
+    });
+  }
+  function populateWeekSelect(selEl, annual, month){
+    selEl.innerHTML = '';
+    const mw = annual.monthWeeks.find(x => x.month === month);
+    if (!mw) return;
+    for (let w = 1; w <= mw.weekCount; w++){
+      const opt = document.createElement('option');
+      opt.value = String(w);
+      opt.textContent = `${w}주`;
+      selEl.appendChild(opt);
+    }
+  }
+
+  function openAnnualBarModal(projectId, barId){
+    const annual = getOrCreateAnnual(currentAnnualYear);
+    const project = annual.projects.find(p => p.id === projectId);
+    if (!project) return;
+    const bar = project.bars.find(b => b.id === barId);
+    if (!bar) return;
+    annualModalCtx = { project, bar, annual };
+    focusedBarId = bar.id;
+
+    const titleInput = document.getElementById('annual-modal-title-input');
+    const smEl = document.getElementById('annual-modal-start-month');
+    const swEl = document.getElementById('annual-modal-start-week');
+    const emEl = document.getElementById('annual-modal-end-month');
+    const ewEl = document.getElementById('annual-modal-end-week');
+    const notesInput = document.getElementById('annual-modal-notes-input');
+
+    titleInput.value = bar.title || '';
+    populateMonthSelect(smEl, annual);
+    populateMonthSelect(emEl, annual);
+
+    const sMW = weekToMonthWeek(annual, bar.startWeek) || { month: annual.monthWeeks[0].month, weekInMonth: 1 };
+    const eMW = weekToMonthWeek(annual, bar.endWeek) || sMW;
+    smEl.value = String(sMW.month);
+    emEl.value = String(eMW.month);
+    populateWeekSelect(swEl, annual, sMW.month);
+    populateWeekSelect(ewEl, annual, eMW.month);
+    swEl.value = String(sMW.weekInMonth);
+    ewEl.value = String(eMW.weekInMonth);
+
+    notesInput.value = bar.notes || '';
+    updateAnnualModalDatesDisplay();
+    document.getElementById('annual-bar-modal').classList.add('is-open');
+    setTimeout(() => titleInput.focus(), 50);
+  }
+  function closeAnnualBarModal(){
+    document.getElementById('annual-bar-modal').classList.remove('is-open');
+    annualModalCtx = null;
+  }
+  function updateAnnualModalDatesDisplay(){
+    if (!annualModalCtx) return;
+    const { annual } = annualModalCtx;
+    const sm = parseInt(document.getElementById('annual-modal-start-month').value, 10);
+    const sw = parseInt(document.getElementById('annual-modal-start-week').value, 10);
+    const em = parseInt(document.getElementById('annual-modal-end-month').value, 10);
+    const ew = parseInt(document.getElementById('annual-modal-end-week').value, 10);
+    const sWeek = monthWeekToWeek(annual, sm, sw);
+    const eWeek = monthWeekToWeek(annual, em, ew);
+    if (sWeek == null || eWeek == null) return;
+    const span = Math.max(0, eWeek - sWeek + 1);
+    document.getElementById('annual-modal-dates-display').textContent = `${sm}월 ${sw}주 — ${em}월 ${ew}주 · 총 ${span}주`;
+  }
+
+  function syncAnnualModalChanges(){
+    saveAnnualLocal();
+    if (currentView === 'annual') renderAnnual();
+  }
+
+  // Wire annual modal inputs
+  document.getElementById('annual-modal-title-input').addEventListener('input', (e) => {
+    if (!annualModalCtx) return;
+    annualModalCtx.bar.title = e.target.value;
+    syncAnnualModalChanges();
+  });
+  document.getElementById('annual-modal-notes-input').addEventListener('input', (e) => {
+    if (!annualModalCtx) return;
+    annualModalCtx.bar.notes = e.target.value;
+    saveAnnualLocal();
+  });
+  const annualModalOnDateChange = () => {
+    if (!annualModalCtx) return;
+    const { annual, bar } = annualModalCtx;
+    const smEl = document.getElementById('annual-modal-start-month');
+    const swEl = document.getElementById('annual-modal-start-week');
+    const emEl = document.getElementById('annual-modal-end-month');
+    const ewEl = document.getElementById('annual-modal-end-week');
+    // 월 변경 시 해당 월 주 목록 재구성
+    populateWeekSelect(swEl, annual, parseInt(smEl.value, 10));
+    populateWeekSelect(ewEl, annual, parseInt(emEl.value, 10));
+    // 값이 비어있으면 1로
+    if (!swEl.value) swEl.value = '1';
+    if (!ewEl.value) ewEl.value = '1';
+    let sWeek = monthWeekToWeek(annual, parseInt(smEl.value,10), parseInt(swEl.value,10));
+    let eWeek = monthWeekToWeek(annual, parseInt(emEl.value,10), parseInt(ewEl.value,10));
+    if (sWeek == null || eWeek == null) return;
+    // 종료 < 시작이면 종료를 시작과 같게 맞춤
+    if (eWeek < sWeek){
+      eWeek = sWeek;
+      const mwEnd = weekToMonthWeek(annual, eWeek);
+      if (mwEnd){
+        emEl.value = String(mwEnd.month);
+        populateWeekSelect(ewEl, annual, mwEnd.month);
+        ewEl.value = String(mwEnd.weekInMonth);
+      }
+    }
+    bar.startWeek = sWeek;
+    bar.endWeek = eWeek;
+    updateAnnualModalDatesDisplay();
+    syncAnnualModalChanges();
+  };
+  ['annual-modal-start-month','annual-modal-start-week','annual-modal-end-month','annual-modal-end-week']
+    .forEach(id => document.getElementById(id).addEventListener('change', annualModalOnDateChange));
+  document.getElementById('annual-modal-close-btn').addEventListener('click', closeAnnualBarModal);
+  document.getElementById('annual-modal-save-btn').addEventListener('click', () => {
+    closeAnnualBarModal();
+    showToast('✓ 저장됨', 'success', 1500);
+  });
+  document.getElementById('annual-modal-delete-btn').addEventListener('click', () => {
+    if (!annualModalCtx) return;
+    const { project, bar } = annualModalCtx;
+    const titleSnippet = bar.title ? `"${bar.title}"` : '(제목 없는) 바';
+    if (!confirm(`${titleSnippet}를 삭제하시겠습니까?`)) return;
+    const idx = project.bars.findIndex(b => b.id === bar.id);
+    if (idx >= 0) project.bars.splice(idx, 1);
+    focusedBarId = null;
+    saveAnnualLocal();
+    closeAnnualBarModal();
+    if (currentView === 'annual') renderAnnual();
+  });
+  document.getElementById('annual-bar-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'annual-bar-modal') closeAnnualBarModal();
+  });
+
+  // ---------- Annual View (Sheet1) ----------
+  function setView(kind){
+    currentView = (kind === 'annual') ? 'annual' : 'monthly';
+    document.getElementById('monthly-panel').hidden = (currentView !== 'monthly');
+    document.getElementById('annual-panel').hidden = (currentView !== 'annual');
+    document.querySelectorAll('.view-tab').forEach(b => {
+      const active = b.dataset.view === currentView;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-selected', String(active));
+    });
+    try{ localStorage.setItem(VIEW_KEY, currentView); }catch(e){}
+    if (currentView === 'annual') renderAnnual();
+  }
+
+  function changeAnnualYear(delta){
+    currentAnnualYear = currentAnnualYear + delta;
+    focusedBarId = null;
+    try{ localStorage.setItem(ANNUAL_YEAR_KEY, String(currentAnnualYear)); }catch(e){}
+    renderAnnual();
+  }
+
+  function resetAnnualYear(){
+    currentAnnualYear = new Date().getFullYear();
+    focusedBarId = null;
+    try{ localStorage.setItem(ANNUAL_YEAR_KEY, String(currentAnnualYear)); }catch(e){}
+    renderAnnual();
+  }
+
+  function addAnnualProjectRow(){
+    const annual = getOrCreateAnnual(currentAnnualYear);
+    const nextIndex = annual.projects.length > 0
+      ? Math.max(...annual.projects.map(p => p.rowIndex || 0)) + 1
+      : 1;
+    // 기본 바 1개 생성 (현재 주를 기준으로 4주)
+    const startWeek = 1;
+    const endWeek = Math.min(annual.totalWeeks || 52, 4);
+    const newBar = { id: barUid(), startWeek, endWeek, title: '', notes: '' };
+    const newProject = { id: projUid(), rowIndex: nextIndex, bars: [newBar] };
+    annual.projects.push(newProject);
+    saveAnnualLocal();
+    renderAnnual();
+    openAnnualBarModal(newProject.id, newBar.id);
+  }
+
+  function deleteAnnualProjectRow(projectId){
+    const annual = getOrCreateAnnual(currentAnnualYear);
+    const idx = annual.projects.findIndex(p => p.id === projectId);
+    if (idx < 0) return;
+    const p = annual.projects[idx];
+    const barCount = (p.bars || []).length;
+    const msg = barCount > 0
+      ? `프로젝트 행 ${p.rowIndex}을(를) 삭제하시겠습니까? (바 ${barCount}개 포함)`
+      : `프로젝트 행 ${p.rowIndex}을(를) 삭제하시겠습니까?`;
+    if (!confirm(msg)) return;
+    annual.projects.splice(idx, 1);
+    // 뒤 행 rowIndex 재번호
+    annual.projects.forEach((pp, i) => { pp.rowIndex = i + 1; });
+    saveAnnualLocal();
+    renderAnnual();
+  }
+
+  function addBarToProject(projectId, startWeek){
+    const annual = getOrCreateAnnual(currentAnnualYear);
+    const project = annual.projects.find(p => p.id === projectId);
+    if (!project) return;
+    const sw = Math.max(1, Math.min(annual.totalWeeks, startWeek));
+    const ew = Math.min(annual.totalWeeks, sw + 3);
+    const newBar = { id: barUid(), startWeek: sw, endWeek: ew, title: '', notes: '' };
+    project.bars.push(newBar);
+    saveAnnualLocal();
+    renderAnnual();
+    openAnnualBarModal(project.id, newBar.id);
+  }
+
+  function renderAnnual(){
+    const annual = getOrCreateAnnual(currentAnnualYear);
+    document.getElementById('annual-title').textContent = annual.title || `${currentAnnualYear}년 연구 개발 계획`;
+    renderAnnualGrid(annual);
+  }
+
+  function renderAnnualGrid(annual){
+    const body = document.getElementById('annual-body');
+    body.innerHTML = '';
+
+    if (!annual.projects || annual.projects.length === 0){
+      const wrap = document.createElement('div');
+      wrap.className = 'annual-wrap';
+      const empty = document.createElement('div');
+      empty.className = 'annual-empty';
+      empty.innerHTML = `<strong>${escapeHtml(String(currentAnnualYear))}년 연간 계획서가 비어있습니다</strong><br>아래 <kbd>+ 프로젝트 행 추가</kbd> 버튼으로 시작하세요.<br><span style="font-size:12px">※ 또는 Sheet1이 있는 엑셀 파일을 연결하면 자동으로 불러옵니다.</span>`;
+      wrap.appendChild(empty);
+      body.appendChild(wrap);
+      return;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'annual-wrap';
+    const grid = document.createElement('div');
+    grid.className = 'annual-grid';
+    grid.id = 'annual-grid';
+
+    const totalWeeks = annual.totalWeeks || 52;
+    grid.style.gridTemplateColumns = `120px repeat(${totalWeeks}, minmax(24px, 1fr))`;
+    const rowCount = annual.projects.length;
+    grid.style.gridTemplateRows = `auto auto auto repeat(${rowCount}, 44px)`;
+
+    // Row 1 corner (spans rows 1-3)
+    const corner = document.createElement('div');
+    corner.className = 'annual-corner';
+    corner.textContent = '행';
+    grid.appendChild(corner);
+
+    // Row 1: 월 레이블 (병합된 그리드 셀로 표현)
+    annual.monthWeeks.forEach((mw, idx) => {
+      const cell = document.createElement('div');
+      cell.className = 'annual-month-cell';
+      if (idx % 2 === 1) cell.style.background = '#efe6d0';
+      cell.textContent = `${mw.month}월`;
+      cell.style.gridRow = '1';
+      cell.style.gridColumn = `${mw.startCol + 1} / ${mw.endCol + 2}`;
+      grid.appendChild(cell);
+    });
+
+    // Row 2: 월 내 주 번호
+    annual.monthWeeks.forEach(mw => {
+      for (let w = 1; w <= mw.weekCount; w++){
+        const cell = document.createElement('div');
+        cell.className = 'annual-weekinmonth';
+        cell.textContent = w;
+        cell.style.gridRow = '2';
+        cell.style.gridColumn = String(mw.startCol + w);
+        grid.appendChild(cell);
+      }
+    });
+
+    // Row 3: 연속 주 번호
+    for (let w = 1; w <= totalWeeks; w++){
+      const cell = document.createElement('div');
+      cell.className = 'annual-weeknum';
+      cell.textContent = w;
+      cell.style.gridRow = '3';
+      cell.style.gridColumn = String(w + 1);
+      grid.appendChild(cell);
+    }
+
+    // Row 4+: 프로젝트 행
+    annual.projects.forEach((p, pi) => {
+      const rowNum = 4 + pi;
+
+      // 왼쪽 행 라벨 + 삭제 버튼
+      const label = document.createElement('div');
+      label.className = 'annual-rowlabel';
+      label.innerHTML = `<span>${escapeHtml(String(p.rowIndex))}</span><button class="row-remove" data-pid="${escapeAttr(p.id)}" title="이 행 삭제">×</button>`;
+      label.style.gridRow = String(rowNum);
+      label.style.gridColumn = '1';
+      label.querySelector('.row-remove').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        deleteAnnualProjectRow(p.id);
+      });
+      grid.appendChild(label);
+
+      // 배경 셀 — 더블클릭으로 새 바 추가
+      for (let w = 1; w <= totalWeeks; w++){
+        const bg = document.createElement('div');
+        bg.className = 'annual-bg';
+        const mw = annual.monthWeeks.find(x => w >= x.startCol && w <= x.endCol);
+        if (mw && mw.month % 2 === 0) bg.classList.add('is-month-even');
+        bg.style.gridRow = String(rowNum);
+        bg.style.gridColumn = String(w + 1);
+        bg.dataset.pid = p.id;
+        bg.dataset.week = String(w);
+        bg.title = '더블클릭으로 이 주에 새 업무 추가';
+        bg.addEventListener('dblclick', () => addBarToProject(p.id, w));
+        grid.appendChild(bg);
+      }
+
+      // 바
+      (p.bars || []).forEach(bar => {
+        const sw = Math.max(1, Math.min(totalWeeks, bar.startWeek));
+        const ew = Math.max(sw, Math.min(totalWeeks, bar.endWeek));
+        const el = document.createElement('div');
+        el.className = 'annual-bar';
+        if (bar.id === focusedBarId) el.classList.add('is-focused');
+        const titleStr = bar.title || '(제목 없음)';
+        el.textContent = titleStr;
+        const mwStart = annual.monthWeeks.find(x => sw >= x.startCol && sw <= x.endCol);
+        const mwEnd = annual.monthWeeks.find(x => ew >= x.startCol && ew <= x.endCol);
+        const startLabel = mwStart ? `${mwStart.month}월 ${sw - mwStart.startCol + 1}주` : `${sw}주`;
+        const endLabel = mwEnd ? `${mwEnd.month}월 ${ew - mwEnd.startCol + 1}주` : `${ew}주`;
+        el.title = `${titleStr}\n${startLabel} ~ ${endLabel}${bar.notes ? '\n\n' + bar.notes : ''}\n(클릭해서 상세 보기)`;
+        el.style.gridRow = String(rowNum);
+        el.style.gridColumn = `${sw + 1} / ${ew + 2}`;
+        el.dataset.pid = p.id;
+        el.dataset.bid = bar.id;
+        el.addEventListener('click', () => openAnnualBarModal(p.id, bar.id));
+        grid.appendChild(el);
+      });
+    });
+
+    wrap.appendChild(grid);
+    body.appendChild(wrap);
+  }
+
+  // ---------- Wiring ----------
+  function changeMonth(delta){
+    const d = new Date(currentYear, currentMonth + delta, 1);
+    currentYear = d.getFullYear();
+    currentMonth = d.getMonth();
+    focusedTaskId = null;
+    renderMonthHeader(); renderCalendar();
+    if (allSectionOpen) renderAllTasks();
+  }
+  function changeBriefingMonth(delta){
+    const d = new Date(briefingYear, briefingMonth + delta, 1);
+    briefingYear = d.getFullYear();
+    briefingMonth = d.getMonth();
+    renderBriefing();
+  }
+
+  document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
+  document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
+  document.getElementById('reset-month').addEventListener('click', () => {
+    currentYear = todayY; currentMonth = todayM; focusedTaskId = null;
+    renderMonthHeader(); renderCalendar();
+    if (allSectionOpen) renderAllTasks();
+  });
+  document.getElementById('add-task-btn').addEventListener('click', addTaskToCurrentMonth);
+  document.getElementById('add-tw-task-btn').addEventListener('click', addThisWeekTask);
+  document.getElementById('all-toggle').addEventListener('click', () => toggleAllSection());
+  document.getElementById('tw-collapse-btn').addEventListener('click', () => setTwCollapsed(!twCollapsed));
+  function setTwCollapsed(collapsed){
+    twCollapsed = collapsed;
+    const section = document.getElementById('tw-section');
+    section.classList.toggle('is-collapsed', collapsed);
+    const btn = document.getElementById('tw-collapse-btn');
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    const label = document.getElementById('tw-collapse-label');
+    if (label) label.textContent = collapsed ? '펼치기' : '접기';
+    // 접을 때 편집 모드였던 항목 정리
+    if (collapsed) editingTwIds.clear();
+  }
+
+  // 캘린더 뷰 모드 (기본 / 펼치기) 토글
+  function setCalendarView(expanded){
+    calendarExpanded = !!expanded;
+    const cal = document.getElementById('calendar');
+    cal.classList.toggle('is-expanded', calendarExpanded);
+    document.querySelectorAll('.cal-view-btn').forEach(btn => {
+      btn.classList.toggle('is-active', btn.dataset.calView === (calendarExpanded ? 'expanded' : 'basic'));
+    });
+    try { localStorage.setItem(CAL_VIEW_KEY, calendarExpanded ? 'expanded' : 'basic'); } catch(e){}
+  }
+  document.querySelectorAll('.cal-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => setCalendarView(btn.dataset.calView === 'expanded'));
+  });
+  document.getElementById('btn-briefing').addEventListener('click', enterBriefing);
+  document.getElementById('btn-exit').addEventListener('click', exitBriefing);
+  document.getElementById('btn-connect').addEventListener('click', connectExcelFile);
+  document.getElementById('btn-save').addEventListener('click', saveToConnectedFile);
+  document.getElementById('btn-export-new').addEventListener('click', exportAsNewFile);
+
+  // Sheet tab switching
+  document.querySelectorAll('.view-tab').forEach(btn => {
+    btn.addEventListener('click', () => setView(btn.dataset.view));
+  });
+  // Annual year navigation
+  document.getElementById('a-prev-year').addEventListener('click', () => changeAnnualYear(-1));
+  document.getElementById('a-next-year').addEventListener('click', () => changeAnnualYear(1));
+  document.getElementById('a-reset-year').addEventListener('click', resetAnnualYear);
+  document.getElementById('add-annual-row-btn').addEventListener('click', addAnnualProjectRow);
+  document.getElementById('b-prev-month').addEventListener('click', () => changeBriefingMonth(-1));
+  document.getElementById('b-next-month').addEventListener('click', () => changeBriefingMonth(1));
+  document.querySelectorAll('.week-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => setBriefingWeek(btn.dataset.week));
+  });
+  document.querySelectorAll('.tw-week-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      twSelectedWeek = btn.dataset.twWeek;
+      editingTwIds.clear();
+      document.querySelectorAll('.tw-week-toggle-btn').forEach(b => {
+        b.classList.toggle('is-active', b.dataset.twWeek === twSelectedWeek);
+      });
+      renderMonthHeader();
+      renderThisWeek();
+    });
+  });
+
+  const w = loadWriter();
+  document.getElementById('writer-name').value = w.name || '';
+  document.getElementById('writer-dept').value = w.dept || '기술연구소';
+  document.getElementById('writer-name').addEventListener('input', saveWriter);
+  document.getElementById('writer-dept').addEventListener('input', saveWriter);
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd + S : save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's'){
+      e.preventDefault();
+      if (fileHandle && FS_API_SUPPORTED) saveToConnectedFile();
+      else if (FS_API_SUPPORTED) showToast('먼저 📂 엑셀 파일 연결을 해주세요', 'error');
+      return;
+    }
+    // Modal open: ESC closes modal (takes priority over other handlers)
+    if (document.getElementById('task-modal').classList.contains('is-open')){
+      if (e.key === 'Escape') closeTaskModal();
+      return;
+    }
+    if (document.getElementById('annual-bar-modal').classList.contains('is-open')){
+      if (e.key === 'Escape') closeAnnualBarModal();
+      return;
+    }
+    // Briefing view only
+    if (document.getElementById('briefing-view').hidden) return;
+    if (e.key === 'Escape') exitBriefing();
+    else if (e.key === 'ArrowLeft' && !e.shiftKey) setBriefingWeek('last');
+    else if (e.key === 'ArrowRight' && !e.shiftKey) setBriefingWeek('this');
+  });
+
+  // Warn before leaving if unsaved
+  window.addEventListener('beforeunload', (e) => {
+    if (isDirty && fileHandle){
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // 저장된 캘린더 뷰 모드 복원
+  try {
+    const savedView = localStorage.getItem(CAL_VIEW_KEY);
+    if (savedView === 'expanded') setCalendarView(true);
+  } catch(e){}
+
+  renderMonthHeader();
+  renderCalendar();
+  renderThisWeek();
+  setTwCollapsed(true); // 기본 접힘 상태로 시작
+  setView(currentView); // 마지막으로 본 시트 탭 복원
+  restoreFileHandle();
+})();
+</script>
+</body>
+</html>

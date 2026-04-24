@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Node / npm (테스트용 xlsx 모듈 등)
+node_modules/
+package.json
+package-lock.json
+
+# Excel 임시/잠금 파일
+~$*.xlsx
+~$*.xls
+
+# Claude Code 로컬 설정
+.claude/settings.local.json
