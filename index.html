@@ -1260,15 +1260,9 @@
       });
 
       editBtn.addEventListener('click', () => {
-        if (editingTwIds.has(task.id)){
-          exitEditMode();
-        } else {
-          editingTwIds.add(task.id);
-          item.classList.add('is-editing');
-          editBtn.textContent = '✓';
-          editBtn.title = '완료';
-          setTimeout(() => { startInput.focus(); startInput.select(); }, 0);
-        }
+        // 인라인 편집 대신 상세 모달 열기 (저장/X로 명시적 처리)
+        focusedTaskId = task.id;
+        openTaskModal(task, y, m);
       });
 
       // 편집 모드 종료 (박스 밖 클릭 또는 ✓ 클릭)
@@ -1435,22 +1429,12 @@
     const {start: weekStart, end: weekEnd} = getTwRange();
     const y = weekStart.getFullYear();
     const m = weekStart.getMonth();
-    const days = daysInMonth(y,m);
-    const start = weekStart.getDate();
-    // If the week spans two months, clip end to this month's last day
-    const end = (weekEnd.getMonth() === m) ? weekEnd.getDate() : days;
-    const data = getMonth(y, m);
-    const t = { id: uid(), title: '', start, end };
-    data.tasks.push(t);
-    focusedTaskId = t.id;
-    saveAllLocal();
-    if (twCollapsed) setTwCollapsed(false); // 추가 시 자동으로 펼침
-    renderCalendar(); renderThisWeek();
-    if (allSectionOpen && y === currentYear && m === currentMonth) renderAllTasks();
-    setTimeout(() => {
-      const el = document.querySelector(`.tw-item[data-id="${t.id}"] .tw-title-input`);
-      if (el){ el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'}); }
-    },50);
+    const days = daysInMonth(y, m);
+    const startDay = weekStart.getDate();
+    const endDay = (weekEnd.getMonth() === m) ? weekEnd.getDate() : days;
+    // 빈 placeholder task로 모달 열기. 저장 눌러야 실제 추가됨.
+    const placeholder = { id: uid(), title: '', start: startDay, end: endDay, notes: '', color: null };
+    openTaskModal(placeholder, y, m, true);
   }
 
   // ---------- Excel Import ----------
@@ -2123,19 +2107,23 @@
   // ---------- Task Detail Modal ----------
   let modalCtx = null; // { task, y, m }
 
-  function openTaskModal(task, y, m){
-    modalCtx = { task, y, m };
+  function openTaskModal(task, y, m, isNew){
+    modalCtx = { task, y, m, isNew: !!isNew };
     const days = daysInMonth(y, m);
     const titleInput = document.getElementById('modal-title-input');
     const startInput = document.getElementById('modal-start-input');
     const endInput = document.getElementById('modal-end-input');
     const notesInput = document.getElementById('modal-notes-input');
+    const titleText = document.getElementById('modal-title-text');
+    const deleteBtn = document.getElementById('modal-delete-btn');
     titleInput.value = task.title || '';
     startInput.min = 1; startInput.max = days; startInput.value = task.start;
     endInput.min = 1; endInput.max = days; endInput.value = task.end;
     notesInput.value = task.notes || '';
     renderColorSwatches('task-modal-swatches', 'task-modal-color-custom', task.color);
     document.getElementById('task-modal-swatches').dataset.selectedColor = task.color || '';
+    if (titleText) titleText.textContent = isNew ? '새 업무 추가' : '업무 상세';
+    if (deleteBtn) deleteBtn.hidden = !!isNew; // 신규 추가 모드에서는 삭제 버튼 숨김 (취소=X)
     updateModalDatesDisplay();
     document.getElementById('task-modal').classList.add('is-open');
     setTimeout(() => titleInput.focus(), 50);
@@ -2203,7 +2191,7 @@
   document.getElementById('modal-close-btn').addEventListener('click', closeTaskModal);
   document.getElementById('modal-save-btn').addEventListener('click', () => {
     if (!modalCtx) { closeTaskModal(); return; }
-    const { task, y, m } = modalCtx;
+    const { task, y, m, isNew } = modalCtx;
     const days = daysInMonth(y, m);
     let s = parseInt(document.getElementById('modal-start-input').value, 10);
     let e = parseInt(document.getElementById('modal-end-input').value, 10);
@@ -2217,13 +2205,24 @@
     task.notes = document.getElementById('modal-notes-input').value;
     const color = document.getElementById('task-modal-swatches').dataset.selectedColor || '';
     task.color = color || null;
+    if (isNew){
+      const data = getMonth(y, m);
+      data.tasks.push(task);
+      focusedTaskId = task.id;
+      if (twCollapsed) setTwCollapsed(false); // 추가 시 자동으로 펼침
+    }
     syncModalChanges();
     closeTaskModal();
-    showToast('✓ 저장됨', 'success', 1500);
+    showToast(isNew ? '✓ 추가됨' : '✓ 저장됨', 'success', 1500);
   });
   document.getElementById('modal-delete-btn').addEventListener('click', () => {
     if (!modalCtx) return;
-    const { task, y, m } = modalCtx;
+    const { task, y, m, isNew } = modalCtx;
+    if (isNew){
+      // 아직 추가되지 않은 상태 — 그냥 닫기
+      closeTaskModal();
+      return;
+    }
     const titleSnippet = task.title ? `"${task.title}"` : '(제목 없는) 업무';
     if (!confirm(`${titleSnippet}를 삭제하시겠습니까?`)) return;
     const key = monthKey(y, m);
