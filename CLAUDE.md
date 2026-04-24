@@ -17,9 +17,9 @@
 
 ```bash
 # Chrome 또는 Edge에서 열기만 하면 끝 (File System Access API 필요)
-open index.html          # macOS
-start index.html         # Windows
-xdg-open index.html      # Linux
+open weekly_schedule.html          # macOS
+start weekly_schedule.html         # Windows
+xdg-open weekly_schedule.html      # Linux
 ```
 
 샘플 데이터로 테스트하려면: `📂 엑셀 파일 연결` → `sample_10months.xlsx` 선택
@@ -28,7 +28,7 @@ xdg-open index.html      # Linux
 
 ```
 kar-schedule-project/
-├── index.html              # 전체 앱 (HTML + CSS + JS 단일 파일, ~87KB)
+├── weekly_schedule.html              # 전체 앱 (HTML + CSS + JS 단일 파일, ~87KB)
 ├── sample_10months.xlsx    # 샘플 데이터 (2025.8 ~ 2026.5, 49개 업무)
 ├── CLAUDE.md               # 이 파일 — 프로젝트 개요
 ├── CONTEXT.md              # 과거 작업 이력 + 설계 결정사항
@@ -75,8 +75,8 @@ kar-schedule-project/
 
 1. **CONTEXT.md** 먼저 읽기 — 지금까지의 설계 결정 및 버그 히스토리
 2. **CURRENT_STATE.md** 확인 — 현재 구현 상태와 알려진 제약사항
-3. 파일 열기: `index.html` (단일 파일이므로 이 파일만 수정)
-4. 테스트: 브라우저에서 `index.html` 열고 `sample_10months.xlsx` 연결
+3. 파일 열기: `weekly_schedule.html` (단일 파일이므로 이 파일만 수정)
+4. 테스트: 브라우저에서 `weekly_schedule.html` 열고 `sample_10months.xlsx` 연결
 
 ## 🔑 중요한 컨벤션
 

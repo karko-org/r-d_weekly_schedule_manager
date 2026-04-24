@@ -138,15 +138,13 @@
   .task-remove{color:var(--muted);font-size:18px;line-height:1;padding:4px;border-radius:4px;transition:all .15s}
   .task-remove:hover{color:var(--today);background:var(--bg)}
 
-  .all-section{margin-bottom:22px}
-  .section-toggle{width:100%;display:flex;align-items:center;gap:10px;padding:14px 22px;text-align:left;font-size:14px;font-weight:600;color:var(--ink);border-radius:12px;background:var(--surface);border:1px solid var(--line);transition:all 0.15s}
-  .section-toggle:hover{border-color:var(--ink-2)}
+  .all-section{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-bottom:22px;transition:padding .15s}
+  .all-section.is-collapsed{padding-bottom:14px}
+  .all-section.is-collapsed .tw-header{margin-bottom:0;padding-bottom:0;border-bottom:none}
+  .all-section.is-collapsed .all-content{display:none}
+  .all-section:not(.is-collapsed) .tw-collapse-btn .chevron{transform:rotate(90deg)}
   .chevron{display:inline-block;transition:transform 0.2s;font-size:10px;color:var(--muted);width:12px}
-  .section-toggle.is-open .chevron{transform:rotate(90deg)}
-  .section-toggle.is-open{border-radius:12px 12px 0 0;border-bottom-color:var(--line-soft)}
-  .all-section-label{flex:1}
-  .all-section-month{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:500}
-  .all-content{background:var(--surface);border:1px solid var(--line);border-top:none;border-radius:0 0 12px 12px;padding:16px 22px 18px}
+  .all-content{padding-top:4px}
   .task-list{display:flex;flex-direction:column;gap:6px}
   .add-task-btn{margin-top:10px;padding:11px;font-size:13px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;transition:all .15s;width:100%}
   .add-task-btn:hover{color:var(--accent);border-color:var(--accent);border-style:solid;background:var(--accent-soft)}
@@ -387,14 +385,21 @@
     <button class="tw-add-btn" id="add-tw-task-btn">+ 이번주 업무 추가</button>
   </section>
 
-  <section class="all-section">
-    <button class="section-toggle" id="all-toggle" aria-expanded="false">
-      <span class="chevron">▶</span>
-      <span class="all-section-label">이번 달 전체 업무</span>
-      <span class="all-section-month" id="all-section-month"></span>
-      <span class="task-count" id="all-count"></span>
-    </button>
-    <div class="all-content" id="all-content" hidden>
+  <section class="all-section is-collapsed" id="all-section">
+    <div class="tw-header">
+      <div class="tw-title-group">
+        <span class="tw-badge">이번 달 전체 업무</span>
+        <span class="tw-range" id="all-section-month"></span>
+      </div>
+      <div class="tw-header-right">
+        <span class="task-count" id="all-count"></span>
+        <button class="tw-collapse-btn" id="all-collapse-btn" aria-expanded="false" aria-label="접기/펼치기">
+          <span class="chevron">▶</span>
+          <span id="all-collapse-label">펼치기</span>
+        </button>
+      </div>
+    </div>
+    <div class="all-content" id="all-content">
       <div class="task-list" id="task-list"></div>
       <button class="add-task-btn" id="add-task-btn">+ 업무 추가</button>
     </div>
@@ -1008,7 +1013,7 @@
     document.getElementById('this-week-chip').textContent = `이번주: ${thisMon.getMonth()+1}/${thisMon.getDate()} - ${thisFri.getMonth()+1}/${thisFri.getDate()} (월~금)`;
     const {start, end} = getTwRange();
     document.getElementById('tw-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
-    document.getElementById('all-section-month').textContent = `· ${currentYear}년 ${currentMonth+1}월`;
+    document.getElementById('all-section-month').textContent = `${currentYear}년 ${currentMonth+1}월`;
   }
 
   function renderCalendar(){
@@ -1307,11 +1312,12 @@
 
   function toggleAllSection(open){
     allSectionOpen = typeof open === 'boolean' ? open : !allSectionOpen;
-    const btn = document.getElementById('all-toggle');
-    const content = document.getElementById('all-content');
-    btn.classList.toggle('is-open', allSectionOpen);
+    const section = document.getElementById('all-section');
+    section.classList.toggle('is-collapsed', !allSectionOpen);
+    const btn = document.getElementById('all-collapse-btn');
     btn.setAttribute('aria-expanded', String(allSectionOpen));
-    content.hidden = !allSectionOpen;
+    const label = document.getElementById('all-collapse-label');
+    if (label) label.textContent = allSectionOpen ? '접기' : '펼치기';
     if (allSectionOpen) renderAllTasks();
   }
 
@@ -2764,7 +2770,7 @@
   });
   document.getElementById('add-task-btn').addEventListener('click', addTaskToCurrentMonth);
   document.getElementById('add-tw-task-btn').addEventListener('click', addThisWeekTask);
-  document.getElementById('all-toggle').addEventListener('click', () => toggleAllSection());
+  document.getElementById('all-collapse-btn').addEventListener('click', () => toggleAllSection());
   document.getElementById('tw-collapse-btn').addEventListener('click', () => setTwCollapsed(!twCollapsed));
   function setTwCollapsed(collapsed){
     twCollapsed = collapsed;
