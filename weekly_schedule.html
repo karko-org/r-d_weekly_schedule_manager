@@ -67,7 +67,8 @@
   .month-title{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;font-feature-settings:"tnum"}
   .reset-btn{font-size:12px;color:var(--accent);padding:8px 14px;border:1px solid var(--accent);border-radius:8px;transition:all .15s}
   .reset-btn:hover{background:var(--accent);color:var(--surface)}
-  .this-week-chip{font-family:var(--mono);font-size:11px;color:var(--bar-accent-ink);background:var(--this-week);padding:6px 12px;border-radius:6px;border:1px solid var(--this-week-border)}
+  .add-log-btn{padding:10px 18px;font-size:13px;font-weight:700;color:var(--surface);background:var(--accent);border-radius:8px;transition:all .15s;letter-spacing:-0.01em;font-family:inherit;white-space:nowrap}
+  .add-log-btn:hover{background:var(--ink)}
 
   .calendar-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px;overflow-x:auto}
   .calendar{display:grid;gap:0;min-width:800px}
@@ -97,7 +98,6 @@
   .tw-section.is-collapsed{padding-bottom:14px}
   .tw-section.is-collapsed .tw-header{margin-bottom:0;padding-bottom:0;border-bottom:none}
   .tw-section.is-collapsed .tw-list{display:none}
-  .tw-section.is-collapsed .tw-add-btn{display:none}
   .tw-header-right{display:flex;align-items:center;gap:12px}
   .tw-collapse-btn{color:var(--muted);font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid transparent;transition:all .15s;display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-weight:500}
   .tw-collapse-btn:hover{color:var(--ink);background:var(--surface);border-color:var(--this-week-border-soft)}
@@ -133,8 +133,6 @@
   .tw-item.is-editing .tw-edit{color:var(--success);font-weight:700;font-size:16px}
   .tw-item.is-editing .tw-edit:hover{color:#256539;background:var(--success-bg)}
   .tw-empty{text-align:center;padding:18px;color:var(--muted);font-size:13px;font-style:italic}
-  .tw-add-btn{margin-top:10px;padding:10px;font-size:13px;color:var(--accent);border:1px dashed var(--this-week-border);border-radius:8px;transition:all .15s;width:100%;background:rgba(255,253,248,0.4)}
-  .tw-add-btn:hover{border-style:solid;background:var(--surface)}
   .task-remove{color:var(--muted);font-size:18px;line-height:1;padding:4px;border-radius:4px;transition:all .15s}
   .task-remove:hover{color:var(--today);background:var(--bg)}
 
@@ -355,8 +353,7 @@
       <div class="month-title" id="month-title"></div>
     </div>
     <button class="nav-btn" id="next-month" aria-label="다음 달">▶</button>
-    <button class="reset-btn" id="reset-month">오늘</button>
-    <span class="this-week-chip" id="this-week-chip"></span>
+    <button class="add-log-btn" id="add-log-btn">＋ 업무 일지 추가</button>
   </section>
 
   <section class="calendar-wrap">
@@ -382,7 +379,6 @@
       </div>
     </div>
     <div class="tw-list" id="tw-list"></div>
-    <button class="tw-add-btn" id="add-tw-task-btn">+ 이번주 업무 추가</button>
   </section>
 
   <section class="all-section is-collapsed" id="all-section">
@@ -401,7 +397,6 @@
     </div>
     <div class="all-content" id="all-content">
       <div class="task-list" id="task-list"></div>
-      <button class="add-task-btn" id="add-task-btn">+ 업무 추가</button>
     </div>
   </section>
   </section><!-- /#monthly-panel -->
@@ -1010,7 +1005,6 @@
     let label = '업무 계획';
     if (currentYear === todayY && currentMonth === todayM) label = '이번 달';
     document.getElementById('month-label').textContent = label;
-    document.getElementById('this-week-chip').textContent = `이번주: ${thisMon.getMonth()+1}/${thisMon.getDate()} - ${thisFri.getMonth()+1}/${thisFri.getDate()} (월~금)`;
     const {start, end} = getTwRange();
     document.getElementById('tw-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
     document.getElementById('all-section-month').textContent = `${currentYear}년 ${currentMonth+1}월`;
@@ -1130,14 +1124,13 @@
 
     // Update labels / button text that depend on selected week
     document.getElementById('tw-badge').textContent = `${label} 업무`;
-    document.getElementById('add-tw-task-btn').textContent = `+ ${label} 업무 추가`;
     document.getElementById('tw-count').textContent = results.length ? `${results.length}건` : '';
     list.innerHTML = '';
 
     if (results.length === 0){
       const empty = document.createElement('div');
       empty.className = 'tw-empty';
-      empty.textContent = `— ${label} 예정 업무가 없습니다. 아래 버튼으로 추가해보세요 —`;
+      empty.textContent = `— ${label} 예정 업무 없음 —`;
       list.appendChild(empty);
       return;
     }
@@ -1252,7 +1245,7 @@
     if (data.tasks.length === 0){
       const empty = document.createElement('div');
       empty.className = 'tw-empty';
-      empty.textContent = '— 이번 달에 등록된 업무가 없습니다. 아래 버튼으로 추가해보세요 —';
+      empty.textContent = '— 이번 달 등록된 업무 없음 —';
       list.appendChild(empty);
       return;
     }
@@ -1321,7 +1314,9 @@
     if (allSectionOpen) renderAllTasks();
   }
 
-  function addTaskToCurrentMonth(){
+  // 단일 "업무 일지 추가" 버튼 — 기본 날짜는 현재 보고 있는 달 맥락으로 설정,
+  // 저장 시 날짜가 이번주/다음주 범위에 들어가면 tw 섹션, 아니면 all 섹션 자동 펼침.
+  function addTaskLog(){
     const y = currentYear;
     const m = currentMonth;
     const days = daysInMonth(y, m);
@@ -1333,18 +1328,7 @@
       start = todayD; end = todayD;
     }
     const placeholder = { id: uid(), title: '', start, end, notes: '', color: null };
-    openTaskModal(placeholder, y, m, true, 'all');
-  }
-
-  function addThisWeekTask(){
-    const {start: weekStart, end: weekEnd} = getTwRange();
-    const y = weekStart.getFullYear();
-    const m = weekStart.getMonth();
-    const days = daysInMonth(y, m);
-    const startDay = weekStart.getDate();
-    const endDay = (weekEnd.getMonth() === m) ? weekEnd.getDate() : days;
-    const placeholder = { id: uid(), title: '', start: startDay, end: endDay, notes: '', color: null };
-    openTaskModal(placeholder, y, m, true, 'tw');
+    openTaskModal(placeholder, y, m, true);
   }
 
   // ---------- MCE-aware style extraction ----------
@@ -2151,8 +2135,8 @@
   // ---------- Task Detail Modal ----------
   let modalCtx = null; // { task, y, m }
 
-  function openTaskModal(task, y, m, isNew, origin){
-    modalCtx = { task, y, m, isNew: !!isNew, origin: origin || null };
+  function openTaskModal(task, y, m, isNew){
+    modalCtx = { task, y, m, isNew: !!isNew };
     const days = daysInMonth(y, m);
     const titleInput = document.getElementById('modal-title-input');
     const startInput = document.getElementById('modal-start-input');
@@ -2253,11 +2237,13 @@
       const data = getMonth(y, m);
       data.tasks.push(task);
       focusedTaskId = task.id;
-      const origin = modalCtx && modalCtx.origin;
-      if (origin === 'all'){
-        if (!allSectionOpen) toggleAllSection(true);
-      } else {
+      // 저장된 날짜가 이번주/다음주 범위에 포함되면 tw 섹션, 아니면 all 섹션 자동 펼침
+      const {start: twStart, end: twEnd} = getTwRange();
+      const inTw = taskOverlapsRange(task, y, m, twStart, twEnd);
+      if (inTw){
         if (twCollapsed) setTwCollapsed(false);
+      } else {
+        if (!allSectionOpen) toggleAllSection(true);
       }
     }
     syncModalChanges();
@@ -2763,13 +2749,7 @@
 
   document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
-  document.getElementById('reset-month').addEventListener('click', () => {
-    currentYear = todayY; currentMonth = todayM; focusedTaskId = null;
-    renderMonthHeader(); renderCalendar();
-    if (allSectionOpen) renderAllTasks();
-  });
-  document.getElementById('add-task-btn').addEventListener('click', addTaskToCurrentMonth);
-  document.getElementById('add-tw-task-btn').addEventListener('click', addThisWeekTask);
+  document.getElementById('add-log-btn').addEventListener('click', addTaskLog);
   document.getElementById('all-collapse-btn').addEventListener('click', () => toggleAllSection());
   document.getElementById('tw-collapse-btn').addEventListener('click', () => setTwCollapsed(!twCollapsed));
   function setTwCollapsed(collapsed){
