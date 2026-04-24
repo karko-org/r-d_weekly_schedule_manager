@@ -118,6 +118,11 @@
   .cal-task-bar{display:flex;align-items:center;padding:4px 8px;font-size:12px;font-weight:500;background:var(--bar-bg);color:var(--bar-ink);border-radius:6px;margin:3px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:30px;border:1px solid rgba(0,0,0,0.05);transition:all .15s;cursor:pointer;z-index:1}
   .cal-task-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink);z-index:2}
   .cal-task-bar.is-focused{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(139,69,19,.3)}
+  /* 원본 엑셀 색상이 있는 월간 바는 호버 시에도 색상 유지 */
+  .cal-task-bar.has-custom-color:hover{filter:brightness(0.92);box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:2}
+  .cal-task-bar.has-custom-color.is-focused{filter:brightness(0.85);box-shadow:0 0 0 2px var(--accent),0 2px 8px rgba(139,69,19,.3)}
+  /* 브리핑(다크) 모드에서는 밝기를 +로 */
+  .briefing-calendar .cal-task-bar.has-custom-color:hover{filter:brightness(1.1);box-shadow:0 2px 10px rgba(0,0,0,0.3)}
 
   .tw-section{background:var(--this-week);border:1px solid var(--this-week-border);border-radius:12px;padding:18px 22px;margin-bottom:14px;transition:padding .15s}
   .tw-section.is-collapsed{padding-bottom:14px}
@@ -585,6 +590,17 @@
         </div>
       </div>
       <div class="modal-field">
+        <label class="modal-label">색상</label>
+        <div class="color-picker">
+          <div class="color-swatches" id="task-modal-swatches" role="radiogroup" aria-label="바 배경색"></div>
+          <label class="color-custom">
+            <span>커스텀</span>
+            <input type="color" id="task-modal-color-custom" aria-label="커스텀 색상" value="#8b4513">
+          </label>
+          <button type="button" class="color-clear" id="task-modal-color-clear">색 없음</button>
+        </div>
+      </div>
+      <div class="modal-field">
         <label class="modal-label" for="modal-notes-input">세부 내용</label>
         <textarea class="modal-notes" id="modal-notes-input" placeholder="상세 메모, 체크리스트, 참고 링크 등을 자유롭게 적으세요..."></textarea>
       </div>
@@ -869,7 +885,7 @@
           Object.entries(importResult.monthly.parsed).forEach(([key, tasks]) => {
             if (!monthData[key]) monthData[key] = { tasks: [] };
             tasks.forEach(t => {
-              monthData[key].tasks.push({ id: uid(), title: t.title, start: t.start, end: t.end, notes: t.notes || '' });
+              monthData[key].tasks.push({ id: uid(), title: t.title, start: t.start, end: t.end, notes: t.notes || '', color: t.color || null });
             });
           });
           try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
@@ -1145,6 +1161,12 @@
       const bar = document.createElement('div');
       bar.className = 'cal-task-bar';
       if (t.id === focusedTaskId) bar.classList.add('is-focused');
+      if (t.color){
+        bar.classList.add('has-custom-color');
+        bar.style.background = '#' + t.color;
+        const textColor = contrastTextColor(t.color);
+        if (textColor) bar.style.color = textColor;
+      }
       const titleStr = t.title || '(제목 없음)';
       // 15자 이하 짧은 제목은 한 줄로 유지 (펼치기 모드에서만 효과 발휘)
       if (titleStr.length <= 15) bar.classList.add('is-short-title');
@@ -1555,7 +1577,7 @@
           const noteText = (cell.c && cell.c.length)
             ? cell.c.map(cm => (cm.t || '')).join('\n').trim()
             : '';
-          result[key].push({ title: val, start: startDay, end: endDay, notes: noteText });
+          result[key].push({ title: val, start: startDay, end: endDay, notes: noteText, color: extractCellColor(cell) });
         }
       }
       prevMonth = ms.month;
@@ -1721,6 +1743,7 @@
     const rows = [];
     const merges = [];
     const cellNotesToAdd = [];
+    const cellStylesToAdd = [];
 
     const title = writer.name ? `업무 일정 및 계획 (${writer.dept||''}${writer.dept?' · ':''}${writer.name})` : '업무 일정 및 계획';
     const titleRow = [title];
@@ -1771,6 +1794,13 @@
             text: t.notes
           });
         }
+        if (t.color){
+          cellStylesToAdd.push({
+            r: monthStartRowIdx + 1 + t._row,
+            c: t.start,
+            color: t.color
+          });
+        }
       });
     });
 
@@ -1784,6 +1814,20 @@
       const addr = XLSX.utils.encode_cell({r, c});
       if (ws[addr]){
         ws[addr].c = [{ a: 'KAR 일정', t: text }];
+      }
+    });
+
+    // 바 배경색 복원
+    cellStylesToAdd.forEach(({ r, c, color }) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (ws[addr]){
+        const prev = ws[addr].s || {};
+        ws[addr].s = Object.assign({}, prev, {
+          fill: { patternType: 'solid', fgColor: { rgb: color }, bgColor: { rgb: color } },
+          patternType: 'solid',
+          fgColor: { rgb: color },
+          bgColor: { rgb: color }
+        });
       }
     });
 
@@ -2001,6 +2045,12 @@
       const bar = document.createElement('div');
       bar.className = 'cal-task-bar';
       if (taskOverlapsRange(t, briefingYear, briefingMonth, start, end)) bar.classList.add('is-highlight-task');
+      if (t.color){
+        bar.classList.add('has-custom-color');
+        bar.style.background = '#' + t.color;
+        const textColor = contrastTextColor(t.color);
+        if (textColor) bar.style.color = textColor;
+      }
       bar.textContent = t.title || '(제목 없음)';
       bar.title = `${t.title || '(제목 없음)'}${t.notes ? '\n\n' + t.notes : ''}\n(클릭해서 상세 보기)`;
       bar.style.gridRow = String(3 + t._row);
@@ -2084,6 +2134,7 @@
     startInput.min = 1; startInput.max = days; startInput.value = task.start;
     endInput.min = 1; endInput.max = days; endInput.value = task.end;
     notesInput.value = task.notes || '';
+    renderColorSwatches('task-modal-swatches', 'task-modal-color-custom', task.color);
     updateModalDatesDisplay();
     document.getElementById('task-modal').classList.add('is-open');
     setTimeout(() => titleInput.focus(), 50);
@@ -2149,6 +2200,19 @@
   document.getElementById('modal-start-input').addEventListener('change', modalOnDateChange);
   document.getElementById('modal-end-input').addEventListener('change', modalOnDateChange);
 
+  // 월간 모달 색상 피커 이벤트
+  document.getElementById('task-modal-swatches').addEventListener('click', (e) => {
+    const btn = e.target.closest('.color-swatch');
+    if (!btn) return;
+    applyTaskColor(btn.dataset.color || '');
+  });
+  document.getElementById('task-modal-color-custom').addEventListener('input', (e) => {
+    applyTaskColor(e.target.value);
+  });
+  document.getElementById('task-modal-color-clear').addEventListener('click', () => {
+    applyTaskColor('');
+  });
+
   document.getElementById('modal-close-btn').addEventListener('click', closeTaskModal);
   document.getElementById('modal-save-btn').addEventListener('click', () => {
     closeTaskModal();
@@ -2195,10 +2259,11 @@
     { hex: 'C59EE2', label: '연보라' }
   ];
 
-  function renderColorSwatches(currentColor){
-    const wrap = document.getElementById('annual-modal-swatches');
+  // 범용 스와치 렌더러 — swatchesElId/customInputId를 받아 월간/연간 모두 지원
+  function renderColorSwatches(swatchesElId, customInputId, currentColor){
+    const wrap = document.getElementById(swatchesElId);
+    if (!wrap) return;
     wrap.innerHTML = '';
-    // "색 없음" 스와치 맨 앞
     const noneBtn = document.createElement('button');
     noneBtn.type = 'button';
     noneBtn.className = 'color-swatch is-none' + (!currentColor ? ' is-active' : '');
@@ -2207,7 +2272,6 @@
     noneBtn.setAttribute('role', 'radio');
     noneBtn.setAttribute('aria-checked', String(!currentColor));
     wrap.appendChild(noneBtn);
-    // 프리셋
     ANNUAL_COLOR_PRESETS.forEach(p => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -2219,19 +2283,28 @@
       btn.setAttribute('aria-checked', String(currentColor === p.hex));
       wrap.appendChild(btn);
     });
-    // 커스텀 input의 기본값을 현재 색 또는 accent로
-    const customInput = document.getElementById('annual-modal-color-custom');
-    const isPreset = !currentColor || ANNUAL_COLOR_PRESETS.some(p => p.hex === currentColor);
-    customInput.value = '#' + (currentColor && !isPreset ? currentColor : '8B4513');
+    const customInput = document.getElementById(customInputId);
+    if (customInput){
+      const isPreset = !currentColor || ANNUAL_COLOR_PRESETS.some(p => p.hex === currentColor);
+      customInput.value = '#' + (currentColor && !isPreset ? currentColor : '8B4513');
+    }
   }
 
   function applyBarColor(colorHex){
     if (!annualModalCtx) return;
     const normalized = colorHex ? String(colorHex).replace('#','').toUpperCase() : '';
     annualModalCtx.bar.color = normalized || null;
-    renderColorSwatches(annualModalCtx.bar.color);
+    renderColorSwatches('annual-modal-swatches', 'annual-modal-color-custom', annualModalCtx.bar.color);
     saveAnnualLocal();
     if (currentView === 'annual') renderAnnual();
+  }
+
+  function applyTaskColor(colorHex){
+    if (!modalCtx) return;
+    const normalized = colorHex ? String(colorHex).replace('#','').toUpperCase() : '';
+    modalCtx.task.color = normalized || null;
+    renderColorSwatches('task-modal-swatches', 'task-modal-color-custom', modalCtx.task.color);
+    syncModalChanges();
   }
 
   function weekToMonthWeek(annual, week){
@@ -2300,7 +2373,7 @@
     ewEl.value = String(eMW.weekInMonth);
 
     notesInput.value = bar.notes || '';
-    renderColorSwatches(bar.color);
+    renderColorSwatches('annual-modal-swatches', 'annual-modal-color-custom', bar.color);
     updateAnnualModalDatesDisplay();
     document.getElementById('annual-bar-modal').classList.add('is-open');
     setTimeout(() => titleInput.focus(), 50);
