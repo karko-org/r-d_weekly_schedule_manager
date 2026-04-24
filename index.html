@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
 <style>
   :root{
@@ -1398,6 +1399,140 @@
     openTaskModal(placeholder, y, m, true);
   }
 
+  // ---------- MCE-aware style extraction ----------
+  // xlsx-js-style은 <mc:AlternateContent> 내부의 cellXfs를 놓치므로
+  // (한컴 등 일부 xlsx 생성기가 이 블록을 다수 씀) 직접 styles.xml·sheet*.xml을
+  // 파싱해 셀별 배경색을 복원한다.
+  function buildMceStyleMap(arrayBuffer){
+    if (typeof fflate === 'undefined') return null;
+    try {
+      const files = fflate.unzipSync(new Uint8Array(arrayBuffer));
+      const td = new TextDecoder('utf-8');
+      const parser = new DOMParser();
+      const NSX = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+      const NSMC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+      const NSR = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+      const stylesBytes = files['xl/styles.xml'];
+      if (!stylesBytes) return null;
+      const sDoc = parser.parseFromString(td.decode(stylesBytes), 'application/xml');
+
+      // fills
+      const fills = [];
+      const fillsNode = sDoc.getElementsByTagNameNS(NSX, 'fills')[0];
+      if (fillsNode){
+        for (const fe of fillsNode.children){
+          if (fe.localName !== 'fill'){ fills.push(null); continue; }
+          const pf = fe.getElementsByTagNameNS(NSX, 'patternFill')[0];
+          if (!pf){ fills.push(null); continue; }
+          const fg = pf.getElementsByTagNameNS(NSX, 'fgColor')[0];
+          fills.push(fg ? fg.getAttribute('rgb') : null);
+        }
+      }
+
+      // cellStyleXfs (상속용)
+      const csxfList = [];
+      const csxfsNode = sDoc.getElementsByTagNameNS(NSX, 'cellStyleXfs')[0];
+      if (csxfsNode){
+        for (const child of csxfsNode.children){
+          if (child.localName === 'xf') csxfList.push(child);
+          else if (child.localName === 'AlternateContent'){
+            const c = child.getElementsByTagNameNS(NSMC, 'Choice')[0];
+            const fb = child.getElementsByTagNameNS(NSMC, 'Fallback')[0];
+            const target = c || fb;
+            if (target){
+              const xf = target.getElementsByTagNameNS(NSX, 'xf')[0];
+              if (xf) csxfList.push(xf);
+            }
+          }
+        }
+      }
+
+      // cellXfs (MCE-aware, Choice 우선)
+      const xfList = [];
+      const cellXfsNode = sDoc.getElementsByTagNameNS(NSX, 'cellXfs')[0];
+      if (cellXfsNode){
+        for (const child of cellXfsNode.children){
+          if (child.localName === 'xf') xfList.push(child);
+          else if (child.localName === 'AlternateContent'){
+            const c = child.getElementsByTagNameNS(NSMC, 'Choice')[0];
+            const fb = child.getElementsByTagNameNS(NSMC, 'Fallback')[0];
+            const target = c || fb;
+            if (target){
+              const xf = target.getElementsByTagNameNS(NSX, 'xf')[0];
+              if (xf) xfList.push(xf);
+            }
+          }
+        }
+      }
+
+      function xfToColor(xf){
+        const applyFillAttr = xf.getAttribute('applyFill');
+        const applyFill = applyFillAttr === '1';
+        const fillId = parseInt(xf.getAttribute('fillId') || '0', 10);
+        // applyFill 명시되어 있고 true이거나, 속성 생략되었고 fillId>1이면 fill 사용
+        const hasFill = applyFill || (applyFillAttr == null && fillId > 1);
+        if (hasFill && fills[fillId]) return fills[fillId];
+        // 상속: xfId가 가리키는 cellStyleXf의 fill
+        const xfId = parseInt(xf.getAttribute('xfId') || '0', 10);
+        if (xfId > 0 && xfId < csxfList.length){
+          const parent = csxfList[xfId];
+          const pFillId = parseInt(parent.getAttribute('fillId') || '0', 10);
+          if (pFillId > 1 && fills[pFillId]) return fills[pFillId];
+        }
+        return null;
+      }
+
+      // workbook.xml + rels로 sheetName → xml 경로 매핑
+      const sheetPathMap = {};
+      const wbBytes = files['xl/workbook.xml'];
+      const wbRelsBytes = files['xl/_rels/workbook.xml.rels'];
+      if (wbBytes && wbRelsBytes){
+        const wbDoc = parser.parseFromString(td.decode(wbBytes), 'application/xml');
+        const relsDoc = parser.parseFromString(td.decode(wbRelsBytes), 'application/xml');
+        const relMap = {};
+        for (const rel of relsDoc.getElementsByTagName('Relationship')){
+          relMap[rel.getAttribute('Id')] = rel.getAttribute('Target');
+        }
+        for (const sheet of wbDoc.getElementsByTagNameNS(NSX, 'sheet')){
+          const name = sheet.getAttribute('name');
+          const rid = sheet.getAttributeNS(NSR, 'id') || sheet.getAttribute('r:id');
+          const target = relMap[rid];
+          if (name && target){
+            const full = target.startsWith('/') ? target.slice(1) : 'xl/' + target;
+            sheetPathMap[name] = full;
+          }
+        }
+      }
+
+      // 시트별 cellRef → hex color 맵 구축
+      const sheetColorMap = {};
+      for (const name of Object.keys(sheetPathMap)){
+        const bytes = files[sheetPathMap[name]];
+        if (!bytes) continue;
+        const shDoc = parser.parseFromString(td.decode(bytes), 'application/xml');
+        const cells = shDoc.getElementsByTagNameNS(NSX, 'c');
+        const m = {};
+        for (const c of cells){
+          const ref = c.getAttribute('r');
+          const sAttr = c.getAttribute('s');
+          if (!ref || !sAttr) continue;
+          const idx = parseInt(sAttr, 10);
+          if (!Number.isFinite(idx) || idx < 0 || idx >= xfList.length) continue;
+          const color = xfToColor(xfList[idx]);
+          if (!color) continue;
+          const clean = color.length === 8 ? color.slice(2) : color;
+          m[ref] = clean.toUpperCase();
+        }
+        sheetColorMap[name] = m;
+      }
+      return sheetColorMap;
+    } catch(err){
+      console.warn('MCE style map build failed:', err);
+      return null;
+    }
+  }
+
   // ---------- Excel Import ----------
   // 시트가 월간(1~31일 헤더), 연간(1~52 주 순), 또는 unknown 인지 판별.
   function detectSheetKind(ws){
@@ -1428,15 +1563,17 @@
     const result = { monthly: { parsed: {}, count: 0, sheet: null }, annual: { parsed: null, count: 0, sheet: null } };
     try {
       const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellStyles: true });
+      // MCE-aware 색상 맵 — xlsx-js-style이 놓친 스타일 복구
+      const mceColorMap = buildMceStyleMap(arrayBuffer);
       for (const sheetName of wb.SheetNames){
         const ws = wb.Sheets[sheetName];
         const kind = detectSheetKind(ws);
         if (kind === 'monthly'){
-          const parsed = parseMonthlyCalendar(ws);
+          const parsed = parseMonthlyCalendar(ws, sheetName, mceColorMap);
           const count = Object.values(parsed).reduce((s,arr) => s+arr.length, 0);
           if (count > result.monthly.count){ result.monthly = { parsed, count, sheet: sheetName }; }
         } else if (kind === 'annual'){
-          const annual = parseAnnualCalendar(ws);
+          const annual = parseAnnualCalendar(ws, sheetName, mceColorMap);
           const count = annual ? annual.projects.reduce((s,p) => s + (p.bars||[]).length, 0) : 0;
           if (annual && count >= result.annual.count){ result.annual = { parsed: annual, count, sheet: sheetName }; }
         }
@@ -1447,7 +1584,7 @@
     return result;
   }
 
-  function parseMonthlyCalendar(ws){
+  function parseMonthlyCalendar(ws, sheetName, colorMap){
     if (!ws || !ws['!ref']) return {};
     const range = XLSX.utils.decode_range(ws['!ref']);
     const merges = (ws['!merges'] || []);
@@ -1522,7 +1659,8 @@
           const noteText = (cell.c && cell.c.length)
             ? cell.c.map(cm => (cm.t || '')).join('\n').trim()
             : '';
-          result[key].push({ title: val, start: startDay, end: endDay, notes: noteText, color: extractCellColor(cell) });
+          const addr = XLSX.utils.encode_cell({r, c: startDay});
+          result[key].push({ title: val, start: startDay, end: endDay, notes: noteText, color: extractCellColor(cell, colorMap, sheetName, addr) });
         }
       }
       prevMonth = ms.month;
@@ -1531,18 +1669,18 @@
     return result;
   }
 
-  // 셀 배경색 추출 (xlsx-js-style / SheetJS cellStyles 결과).
-  // 반환: 6자리 hex 문자열 (예: "FAA4B0") 또는 null.
-  function extractCellColor(cell){
+  // 셀 배경색 추출. MCE 스타일 맵(sheetName:{ref:hex})이 있으면 먼저 조회, 없으면 cell.s 폴백.
+  function extractCellColor(cell, colorMap, sheetName, addr){
+    if (colorMap && sheetName && addr){
+      const m = colorMap[sheetName];
+      if (m && m[addr]) return m[addr];
+    }
     if (!cell || !cell.s) return null;
     const s = cell.s;
-    // pattern 없으면 색상 없음
     const pt = s.patternType || (s.fill && s.fill.patternType);
     if (pt === 'none') return null;
-    // fgColor가 일반적으로 셀 배경 (solid fill)
     const fg = s.fgColor || (s.fill && s.fill.fgColor);
     if (fg && typeof fg.rgb === 'string'){
-      // 앞에 알파(AARRGGBB) 있으면 뒤 6자리
       const hex = fg.rgb.length === 8 ? fg.rgb.slice(2) : fg.rgb;
       return hex.toUpperCase();
     }
@@ -1565,7 +1703,7 @@
     return yiq >= 150 ? '#1a1814' : '#ffffff';
   }
 
-  function parseAnnualCalendar(ws){
+  function parseAnnualCalendar(ws, sheetName, colorMap){
     if (!ws || !ws['!ref']) return null;
     const range = XLSX.utils.decode_range(ws['!ref']);
     const merges = (ws['!merges'] || []);
@@ -1660,13 +1798,14 @@
         const noteText = (cell.c && cell.c.length)
           ? cell.c.map(cm => (cm.t || '')).join('\n').trim()
           : '';
+        const addr = XLSX.utils.encode_cell({r, c});
         bars.push({
           id: barUid(),
           startWeek: c,
           endWeek: Math.min(endCol, totalWeeks),
           title: val,
           notes: noteText,
-          color: extractCellColor(cell)
+          color: extractCellColor(cell, colorMap, sheetName, addr)
         });
       }
 
