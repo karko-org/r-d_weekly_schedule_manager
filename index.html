@@ -73,35 +73,7 @@
   .writer-info input:focus{outline:none;border-color:var(--ink)}
 
   .calendar-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px;overflow-x:auto}
-  .cal-toolbar{display:flex;justify-content:flex-end;align-items:center;padding:0 0 12px 0;gap:10px}
-  .cal-toolbar-label{font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;font-weight:500}
-  .cal-view-toggle{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:2px}
-  .cal-view-btn{padding:6px 14px;font-size:12px;font-weight:600;color:var(--muted);border-radius:6px;transition:all .12s;font-family:inherit;letter-spacing:-0.01em}
-  .cal-view-btn:hover{color:var(--ink)}
-  .cal-view-btn.is-active{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,0.06)}
   .calendar{display:grid;gap:0;min-width:800px}
-  .calendar.is-expanded{min-width:1400px}
-  .calendar.is-expanded .cal-bg{min-height:48px}
-  .calendar.is-expanded .cal-task-bar{
-    white-space:normal;
-    word-break:keep-all;
-    overflow-wrap:anywhere;
-    text-overflow:clip;
-    padding:7px 8px;
-    line-height:1.35;
-    min-height:38px;
-    height:auto;
-    align-items:center;
-    justify-content:center;
-    text-align:center;
-    font-size:12.5px;
-  }
-  /* 15자 이하 짧은 제목은 한 줄로 — 필요 시 셀 밖으로 늘어남 */
-  .calendar.is-expanded .cal-task-bar.is-short-title{
-    white-space:nowrap;
-    min-width:max-content;
-    z-index:3;
-  }
   .cal-corner{grid-column:1;grid-row:1 / span 2;background:var(--bg);border:1px solid var(--line-soft);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);text-align:center;padding:6px;line-height:1.3;white-space:pre}
   .cal-day-num{grid-row:1;border:1px solid var(--line-soft);padding:8px 2px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink-2);background:var(--bg)}
   .cal-day-num.is-highlight{background:var(--this-week);color:var(--bar-accent-ink)}
@@ -408,13 +380,6 @@
   </section>
 
   <section class="calendar-wrap">
-    <div class="cal-toolbar">
-      <span class="cal-toolbar-label">보기</span>
-      <div class="cal-view-toggle" role="tablist">
-        <button class="cal-view-btn is-active" data-cal-view="basic" role="tab">기본</button>
-        <button class="cal-view-btn" data-cal-view="expanded" role="tab">일정 펼치기</button>
-      </div>
-    </div>
     <div class="calendar" id="calendar"></div>
   </section>
 
@@ -623,7 +588,6 @@
   const STORAGE_KEY = 'kar_monthly_schedule_v1';
   const WRITER_KEY = 'kar_weekly_writer_v1';
   const FILE_HANDLE_KEY = 'kar_excel_file_handle_v1';
-  const CAL_VIEW_KEY = 'kar_cal_view_v1'; // 'basic' | 'expanded'
   const ANNUAL_STORAGE_KEY = 'kar_annual_schedule_v1';
   const VIEW_KEY = 'kar_current_view_v1'; // 'monthly' | 'annual'
   const ANNUAL_YEAR_KEY = 'kar_current_annual_year_v1';
@@ -665,7 +629,6 @@
   let briefingWeek = 'this';
   let twSelectedWeek = 'this'; // 'this' | 'next' — 입력 뷰의 주간 섹션
   let twCollapsed = true; // 이번주/다음주 섹션 접힘 상태 — 기본 접힘
-  let calendarExpanded = false; // 캘린더 펼치기 모드 (기본=false)
   const editingTwIds = new Set();
   let monthData = loadAll();
   let focusedTaskId = null;
@@ -1168,8 +1131,6 @@
         if (textColor) bar.style.color = textColor;
       }
       const titleStr = t.title || '(제목 없음)';
-      // 15자 이하 짧은 제목은 한 줄로 유지 (펼치기 모드에서만 효과 발휘)
-      if (titleStr.length <= 15) bar.classList.add('is-short-title');
       bar.textContent = titleStr;
       bar.title = `${titleStr}\n${currentMonth+1}/${t.start} ~ ${currentMonth+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
       bar.style.gridRow = String(3 + t._row);
@@ -2735,19 +2696,6 @@
     if (collapsed) editingTwIds.clear();
   }
 
-  // 캘린더 뷰 모드 (기본 / 펼치기) 토글
-  function setCalendarView(expanded){
-    calendarExpanded = !!expanded;
-    const cal = document.getElementById('calendar');
-    cal.classList.toggle('is-expanded', calendarExpanded);
-    document.querySelectorAll('.cal-view-btn').forEach(btn => {
-      btn.classList.toggle('is-active', btn.dataset.calView === (calendarExpanded ? 'expanded' : 'basic'));
-    });
-    try { localStorage.setItem(CAL_VIEW_KEY, calendarExpanded ? 'expanded' : 'basic'); } catch(e){}
-  }
-  document.querySelectorAll('.cal-view-btn').forEach(btn => {
-    btn.addEventListener('click', () => setCalendarView(btn.dataset.calView === 'expanded'));
-  });
   document.getElementById('btn-briefing').addEventListener('click', enterBriefing);
   document.getElementById('btn-exit').addEventListener('click', exitBriefing);
   document.getElementById('btn-connect').addEventListener('click', connectExcelFile);
@@ -2818,12 +2766,6 @@
       e.returnValue = '';
     }
   });
-
-  // 저장된 캘린더 뷰 모드 복원
-  try {
-    const savedView = localStorage.getItem(CAL_VIEW_KEY);
-    if (savedView === 'expanded') setCalendarView(true);
-  } catch(e){}
 
   renderMonthHeader();
   renderCalendar();
