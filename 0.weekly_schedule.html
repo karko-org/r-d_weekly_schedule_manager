@@ -1172,12 +1172,11 @@
           if (twin && document.activeElement !== twin) twin.value = task.title;
         }
       });
-      // Enter → 저장(input 이벤트로 이미 적용됨) + 섹션 접기
+      // Enter → input 포커스 해제만 (값은 input 이벤트로 이미 저장됨)
       titleEl.addEventListener('keydown', e => {
         if (e.key === 'Enter'){
           e.preventDefault();
           titleEl.blur();
-          setTwCollapsed(true);
         }
       });
 
