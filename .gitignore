@@ -6,7 +6,9 @@ node_modules/
 package.json
 package-lock.json
 
-# Excel 임시/잠금 파일
+# Excel 파일은 개인 업무 데이터라 repo에 포함하지 않음
+*.xlsx
+*.xls
 ~$*.xlsx
 ~$*.xls
 
