@@ -6,7 +6,7 @@
 <title>KAR 업무 일정 캘린더</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
 <style>
   :root{
@@ -268,6 +268,9 @@
   .annual-bar{display:flex;align-items:center;padding:6px 10px;font-size:12.5px;font-weight:500;background:var(--bar-bg);color:var(--bar-ink);border-radius:6px;margin:4px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:32px;border:1px solid rgba(0,0,0,0.05);transition:all .15s;cursor:pointer;z-index:1}
   .annual-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink);z-index:2}
   .annual-bar.is-focused{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(139,69,19,.3)}
+  /* 원본 엑셀 색상이 있는 바는 호버 시에도 색상 유지 (밝기만 살짝 조정) */
+  .annual-bar.has-custom-color:hover{filter:brightness(0.92);box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:2}
+  .annual-bar.has-custom-color.is-focused{filter:brightness(0.85);box-shadow:0 0 0 2px var(--accent),0 2px 8px rgba(139,69,19,.3)}
   .annual-actions{display:flex;gap:10px}
   .annual-empty{text-align:center;padding:60px 24px;color:var(--muted);font-size:14px;line-height:1.7;background:var(--surface);border:1px dashed var(--line);border-radius:12px}
   .annual-empty strong{color:var(--ink-2)}
@@ -1427,7 +1430,7 @@
   function tryImportExcel(arrayBuffer, filename){
     const result = { monthly: { parsed: {}, count: 0, sheet: null }, annual: { parsed: null, count: 0, sheet: null } };
     try {
-      const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+      const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellStyles: true });
       for (const sheetName of wb.SheetNames){
         const ws = wb.Sheets[sheetName];
         const kind = detectSheetKind(ws);
@@ -1531,6 +1534,40 @@
     return result;
   }
 
+  // 셀 배경색 추출 (xlsx-js-style / SheetJS cellStyles 결과).
+  // 반환: 6자리 hex 문자열 (예: "FAA4B0") 또는 null.
+  function extractCellColor(cell){
+    if (!cell || !cell.s) return null;
+    const s = cell.s;
+    // pattern 없으면 색상 없음
+    const pt = s.patternType || (s.fill && s.fill.patternType);
+    if (pt === 'none') return null;
+    // fgColor가 일반적으로 셀 배경 (solid fill)
+    const fg = s.fgColor || (s.fill && s.fill.fgColor);
+    if (fg && typeof fg.rgb === 'string'){
+      // 앞에 알파(AARRGGBB) 있으면 뒤 6자리
+      const hex = fg.rgb.length === 8 ? fg.rgb.slice(2) : fg.rgb;
+      return hex.toUpperCase();
+    }
+    const bg = s.bgColor || (s.fill && s.fill.bgColor);
+    if (bg && typeof bg.rgb === 'string'){
+      const hex = bg.rgb.length === 8 ? bg.rgb.slice(2) : bg.rgb;
+      return hex.toUpperCase();
+    }
+    return null;
+  }
+
+  // 배경색 기준으로 읽기 쉬운 텍스트 색 결정 (YIQ 공식)
+  function contrastTextColor(hex){
+    if (!hex || typeof hex !== 'string' || hex.length < 6) return null;
+    const h = hex.length === 8 ? hex.slice(2) : hex;
+    const r = parseInt(h.slice(0,2), 16);
+    const g = parseInt(h.slice(2,4), 16);
+    const b = parseInt(h.slice(4,6), 16);
+    const yiq = (r*299 + g*587 + b*114) / 1000;
+    return yiq >= 150 ? '#1a1814' : '#ffffff';
+  }
+
   function parseAnnualCalendar(ws){
     if (!ws || !ws['!ref']) return null;
     const range = XLSX.utils.decode_range(ws['!ref']);
@@ -1631,7 +1668,8 @@
           startWeek: c,
           endWeek: Math.min(endCol, totalWeeks),
           title: val,
-          notes: noteText
+          notes: noteText,
+          color: extractCellColor(cell)
         });
       }
 
@@ -1727,6 +1765,7 @@
     const rows = [];
     const merges = [];
     const cellNotesToAdd = [];
+    const cellStylesToAdd = []; // {r, c, color} — 저장 후 ws[addr].s에 적용
 
     // R1: 타이틀 (A1:??1 병합)
     const titleRow = [annual.title || `${annual.year}년 연구 개발 계획`];
@@ -1775,6 +1814,9 @@
         if (bar.notes && bar.notes.trim()){
           cellNotesToAdd.push({ r: rowIdx, c: sw, text: bar.notes });
         }
+        if (bar.color){
+          cellStylesToAdd.push({ r: rowIdx, c: sw, color: bar.color });
+        }
       });
       rows.push(rowArr);
     });
@@ -1789,6 +1831,21 @@
       const addr = XLSX.utils.encode_cell({ r, c });
       if (ws[addr]){
         ws[addr].c = [{ a: 'KAR 일정', t: text }];
+      }
+    });
+
+    // 바 배경색 복원 (xlsx-js-style 포맷)
+    cellStylesToAdd.forEach(({ r, c, color }) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (ws[addr]){
+        const prev = ws[addr].s || {};
+        ws[addr].s = Object.assign({}, prev, {
+          fill: { patternType: 'solid', fgColor: { rgb: color }, bgColor: { rgb: color } },
+          // 상위 레벨 속성도 함께 — 일부 엑셀 버전 호환
+          patternType: 'solid',
+          fgColor: { rgb: color },
+          bgColor: { rgb: color }
+        });
       }
     });
 
@@ -2436,6 +2493,13 @@
         const el = document.createElement('div');
         el.className = 'annual-bar';
         if (bar.id === focusedBarId) el.classList.add('is-focused');
+        // 원본 엑셀의 색상 복원
+        if (bar.color){
+          el.style.background = '#' + bar.color;
+          const textColor = contrastTextColor(bar.color);
+          if (textColor) el.style.color = textColor;
+          el.classList.add('has-custom-color');
+        }
         const titleStr = bar.title || '(제목 없음)';
         el.textContent = titleStr;
         const mwStart = annual.monthWeeks.find(x => sw >= x.startCol && sw <= x.endCol);
