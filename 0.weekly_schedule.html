@@ -340,8 +340,8 @@
           <option value="title">제목순</option>
         </select>
         <select class="all-sort-select" id="all-sort-dir" aria-label="정렬 방향">
-          <option value="desc">내림차순</option>
           <option value="asc">오름차순</option>
+          <option value="desc">내림차순</option>
         </select>
         <span class="task-count" id="all-count"></span>
         <button class="tw-collapse-btn" id="all-collapse-btn" aria-expanded="false" aria-label="접기/펼치기">
@@ -531,8 +531,8 @@
     catch(e){ return 'date'; }
   })();
   let allSortDir = (function(){
-    try { const v = localStorage.getItem(ALL_SORT_DIR_KEY); return (v === 'asc') ? 'asc' : 'desc'; }
-    catch(e){ return 'desc'; }
+    try { const v = localStorage.getItem(ALL_SORT_DIR_KEY); return (v === 'desc') ? 'desc' : 'asc'; }
+    catch(e){ return 'asc'; }
   })();
 
   function sortTasks(tasks){
@@ -722,55 +722,35 @@
       const annualCount = importResult.annual.count;
       const totalCount = monthlyCount + annualCount;
 
-      // Ask about merging imported data if anything found
+      // 파일 선택 = 그 파일 내용으로 교체 (추가 confirm 없음)
       if (totalCount > 0){
-        const existingMonthlyCount = Object.values(monthData).reduce((s,md) => s + (md.tasks||[]).length, 0);
-        const existingAnnualCount = Object.values(annualData).reduce((s, a) => s + (a.projects||[]).reduce((ss, p) => ss + (p.bars||[]).length, 0), 0);
-        const existingTotal = existingMonthlyCount + existingAnnualCount;
-        let doImport = true;
-        if (existingTotal > 0){
-          const foundParts = [];
-          if (monthlyCount > 0) foundParts.push(`월간 ${monthlyCount}개`);
-          if (annualCount > 0) foundParts.push(`연간 ${annualCount}개`);
-          const existingParts = [];
-          if (existingMonthlyCount > 0) existingParts.push(`월간 ${existingMonthlyCount}개`);
-          if (existingAnnualCount > 0) existingParts.push(`연간 ${existingAnnualCount}개`);
-          doImport = confirm(
-            `"${file.name}"에서 ${foundParts.join(', ')} 업무를 발견했습니다.\n\n` +
-            `현재 등록된 업무: ${existingParts.join(', ')}\n\n` +
-            `[확인] 파일 내용으로 교체\n` +
-            `[취소] 기존 업무 유지 (파일은 연결만 하고 내용은 무시)`
-          );
-        }
-        if (doImport){
-          // 월간 가져오기
-          monthData = {};
-          Object.entries(importResult.monthly.parsed).forEach(([key, tasks]) => {
-            if (!monthData[key]) monthData[key] = { tasks: [] };
-            tasks.forEach(t => {
-              monthData[key].tasks.push({ id: uid(), title: t.title, start: t.start, end: t.end, notes: t.notes || '', color: t.color || null });
-            });
+        // 월간 가져오기
+        monthData = {};
+        Object.entries(importResult.monthly.parsed).forEach(([key, tasks]) => {
+          if (!monthData[key]) monthData[key] = { tasks: [] };
+          tasks.forEach(t => {
+            monthData[key].tasks.push({ id: uid(), title: t.title, start: t.start, end: t.end, notes: t.notes || '', color: t.color || null });
           });
-          try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
-          // 월간이 있으면 가장 이른 월로 이동
-          const importedMonths = Object.keys(importResult.monthly.parsed).filter(k => importResult.monthly.parsed[k].length > 0).sort();
-          if (importedMonths.length > 0){
-            const [y,m] = importedMonths[0].split('-').map((v,i) => i===0 ? parseInt(v,10) : parseInt(v,10)-1);
-            currentYear = y; currentMonth = m;
-          }
-          // 연간 가져오기
-          if (importResult.annual.parsed){
-            const a = importResult.annual.parsed;
-            const yearKey = String(a.year);
-            annualData = {}; // 교체 모드에서는 전체 교체
-            annualData[yearKey] = a;
-            currentAnnualYear = a.year;
-            try{ localStorage.setItem(ANNUAL_STORAGE_KEY, JSON.stringify(annualData)); }catch(e){}
-            try{ localStorage.setItem(ANNUAL_YEAR_KEY, String(a.year)); }catch(e){}
-          } else {
-            annualData = {};
-            try{ localStorage.setItem(ANNUAL_STORAGE_KEY, '{}'); }catch(e){}
-          }
+        });
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
+        // 월간이 있으면 가장 이른 월로 이동
+        const importedMonths = Object.keys(importResult.monthly.parsed).filter(k => importResult.monthly.parsed[k].length > 0).sort();
+        if (importedMonths.length > 0){
+          const [y,m] = importedMonths[0].split('-').map((v,i) => i===0 ? parseInt(v,10) : parseInt(v,10)-1);
+          currentYear = y; currentMonth = m;
+        }
+        // 연간 가져오기
+        if (importResult.annual.parsed){
+          const a = importResult.annual.parsed;
+          const yearKey = String(a.year);
+          annualData = {}; // 교체 모드에서는 전체 교체
+          annualData[yearKey] = a;
+          currentAnnualYear = a.year;
+          try{ localStorage.setItem(ANNUAL_STORAGE_KEY, JSON.stringify(annualData)); }catch(e){}
+          try{ localStorage.setItem(ANNUAL_YEAR_KEY, String(a.year)); }catch(e){}
+        } else {
+          annualData = {};
+          try{ localStorage.setItem(ANNUAL_STORAGE_KEY, '{}'); }catch(e){}
         }
       }
 
