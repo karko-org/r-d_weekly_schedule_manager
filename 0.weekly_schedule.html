@@ -139,6 +139,10 @@
   .all-section.is-collapsed .tw-header{margin-bottom:0;padding-bottom:0;border-bottom:none}
   .all-section.is-collapsed .all-content{display:none}
   .all-section:not(.is-collapsed) .tw-collapse-btn .chevron{transform:rotate(90deg)}
+  .all-sort-select{font-family:inherit;font-size:12px;padding:5px 28px 5px 10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink-2);cursor:pointer;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);background-position:calc(100% - 14px) 50%, calc(100% - 10px) 50%;background-size:4px 4px, 4px 4px;background-repeat:no-repeat}
+  .all-sort-select:hover{border-color:var(--ink-2);color:var(--ink)}
+  .all-sort-select:focus{outline:none;border-color:var(--accent)}
+  .all-section.is-collapsed .all-sort-select{display:none}
   .chevron{display:inline-block;transition:transform 0.2s;font-size:10px;color:var(--muted);width:12px}
   .all-content{padding-top:4px}
   .task-list{display:flex;flex-direction:column;gap:6px}
@@ -331,6 +335,13 @@
         <span class="tw-badge" id="all-section-badge"></span>
       </div>
       <div class="tw-header-right">
+        <select class="all-sort-select" id="all-sort-select" aria-label="정렬 방식">
+          <option value="default">기본</option>
+          <option value="title-asc">제목 ↑ (ㄱ→ㅎ)</option>
+          <option value="title-desc">제목 ↓ (ㅎ→ㄱ)</option>
+          <option value="start-asc">시작일 ↑ (빠른 순)</option>
+          <option value="start-desc">시작일 ↓ (늦은 순)</option>
+        </select>
         <span class="task-count" id="all-count"></span>
         <button class="tw-collapse-btn" id="all-collapse-btn" aria-expanded="false" aria-label="접기/펼치기">
           <span class="chevron">▶</span>
@@ -473,6 +484,7 @@
   const ANNUAL_STORAGE_KEY = 'kar_annual_schedule_v1';
   const VIEW_KEY = 'kar_current_view_v1'; // 'monthly' | 'annual'
   const ANNUAL_YEAR_KEY = 'kar_current_annual_year_v1';
+  const ALL_SORT_KEY = 'kar_all_sort_v1'; // 'default' | 'title-asc' | 'title-desc' | 'start-asc' | 'start-desc'
 
   const FS_API_SUPPORTED = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 
@@ -512,6 +524,26 @@
   let monthData = loadAll();
   let focusedTaskId = null;
   let allSectionOpen = false;
+  let allSortMode = (function(){
+    try { return localStorage.getItem(ALL_SORT_KEY) || 'default'; }
+    catch(e){ return 'default'; }
+  })();
+
+  function sortTasks(tasks, mode){
+    const arr = [...tasks];
+    switch (mode){
+      case 'title-asc':
+        return arr.sort((a,b) => (a.title||'').localeCompare(b.title||'', 'ko'));
+      case 'title-desc':
+        return arr.sort((a,b) => (b.title||'').localeCompare(a.title||'', 'ko'));
+      case 'start-asc':
+        return arr.sort((a,b) => a.start - b.start || (a.title||'').localeCompare(b.title||'', 'ko'));
+      case 'start-desc':
+        return arr.sort((a,b) => b.start - a.start || (a.title||'').localeCompare(b.title||'', 'ko'));
+      default:
+        return arr; // 추가 순 원본 유지
+    }
+  }
   let fileHandle = null;
   let lastFileHandle = null; // 초기화되어도 유지되는 '마지막 연결 파일' — 파일 선택창 startIn 힌트용
   let isDirty = false;
@@ -1210,8 +1242,9 @@
 
     const y = currentYear;
     const m = currentMonth;
+    const sorted = sortTasks(data.tasks, allSortMode);
 
-    data.tasks.forEach(task => {
+    sorted.forEach(task => {
       const item = document.createElement('div');
       item.className = 'tw-item';
       item.dataset.id = task.id;
@@ -2612,6 +2645,16 @@
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('add-log-btn').addEventListener('click', addTaskLog);
   document.getElementById('all-collapse-btn').addEventListener('click', () => toggleAllSection());
+  (function initAllSortSelect(){
+    const sel = document.getElementById('all-sort-select');
+    if (!sel) return;
+    sel.value = allSortMode;
+    sel.addEventListener('change', e => {
+      allSortMode = e.target.value;
+      try { localStorage.setItem(ALL_SORT_KEY, allSortMode); } catch(_){}
+      renderAllTasks();
+    });
+  })();
   document.getElementById('tw-collapse-btn').addEventListener('click', () => setTwCollapsed(!twCollapsed));
   function setTwCollapsed(collapsed){
     twCollapsed = collapsed;
