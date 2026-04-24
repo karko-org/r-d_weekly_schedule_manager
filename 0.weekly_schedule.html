@@ -52,7 +52,6 @@
   .file-status{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:8px;font-size:12px;font-family:var(--mono);border:1px solid var(--line);background:var(--surface);transition:all .15s}
   .file-status.is-connected{background:var(--success-bg);border-color:var(--success);color:var(--success)}
   .file-status.is-unsupported{background:var(--this-week);border-color:var(--this-week-border);color:var(--bar-accent-ink)}
-  .file-status-icon{font-size:14px}
   .file-status-text{font-weight:600;letter-spacing:-0.01em}
   .file-status-name{color:var(--muted);font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .file-status.is-connected .file-status-name{color:var(--ink-2)}
@@ -270,7 +269,7 @@
     </div>
     <div style="display:flex;align-items:center;gap:12px">
       <div class="file-status" id="file-status">
-        <span class="file-status-icon">⊘</span>
+        
         <span class="file-status-text">파일 미연결</span>
       </div>
       <span class="version">v1.0</span>
@@ -859,7 +858,7 @@
     renderThisWeek();
     if (allSectionOpen) renderAllTasks();
     if (currentView === 'annual') renderAnnual();
-    showToast('✓ 초기화되었습니다', 'success');
+    showToast('초기화되었습니다', 'success');
   }
 
   async function ensurePermission(handle, mode='readwrite'){
@@ -890,7 +889,7 @@
       renderFileStatus();
       const now = new Date();
       const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-      showToast(`✓ 저장됨 · ${timeStr}`, 'success');
+      showToast(`저장됨 · ${timeStr}`, 'success');
     } catch(err){
       console.error(err);
       if (err.name === 'NotAllowedError'){
@@ -927,7 +926,7 @@
         // 마지막 위치 힌트 업데이트
         lastFileHandle = handle;
         try { if (window.idbKeyval) await window.idbKeyval.set(LAST_FILE_HANDLE_KEY, handle); } catch(e){}
-        showToast(`✓ 새 파일로 저장됨`, 'success');
+        showToast('새 파일로 저장됨', 'success');
       } catch(err){
         if (err.name === 'AbortError') return;
         console.error(err);
@@ -949,7 +948,7 @@
 
     if (!FS_API_SUPPORTED){
       el.className = 'file-status is-unsupported';
-      el.innerHTML = `<span class="file-status-icon">⚠</span><span class="file-status-text">이 브라우저는 저장 기능 미지원</span><span class="file-status-name">Chrome/Edge 권장</span>`;
+      el.innerHTML = `<span class="file-status-text">이 브라우저는 저장 기능 미지원</span><span class="file-status-name">Chrome/Edge 권장</span>`;
       document.getElementById('btn-connect').disabled = true;
       document.getElementById('btn-connect').style.display = 'none';
       saveBtn.disabled = true;
@@ -959,21 +958,21 @@
 
     if (!fileHandle){
       el.className = 'file-status';
-      el.innerHTML = `<span class="file-status-icon">⊘</span><span class="file-status-text">파일 미연결</span>`;
+      el.innerHTML = `<span class="file-status-text">파일 미연결</span>`;
       saveBtn.disabled = true;
       saveBtn.textContent = '저장';
     } else {
       el.className = 'file-status is-connected';
       const name = fileHandle.name || 'file.xlsx';
       el.innerHTML = `
-        <span class="file-status-icon">●</span>
+        
         <span class="file-status-text">${isDirty ? '변경됨' : '동기화됨'}</span>
         <span class="file-status-name" title="${escapeAttr(name)}">${escapeHtml(name)}</span>
         <button class="disconnect-btn" id="disconnect-btn" title="연결 해제 및 초기화">✕</button>
       `;
       document.getElementById('disconnect-btn').addEventListener('click', (e) => { e.stopPropagation(); disconnectFile(); });
       saveBtn.disabled = !isDirty;
-      saveBtn.textContent = isDirty ? '저장' : '✓ 저장됨';
+      saveBtn.textContent = isDirty ? '저장' : '저장됨';
     }
   }
 
@@ -985,7 +984,7 @@
       return;
     }
     saveBtn.disabled = !isDirty;
-    saveBtn.textContent = isDirty ? '저장' : '✓ 저장됨';
+    saveBtn.textContent = isDirty ? '저장' : '저장됨';
     // Also update status label
     const statusText = document.querySelector('#file-status .file-status-text');
     if (statusText) statusText.textContent = isDirty ? '변경됨' : '동기화됨';
@@ -2165,7 +2164,7 @@
 
     syncModalChanges();
     closeTaskModal();
-    showToast(isNew ? '✓ 추가됨' : '✓ 저장됨', 'success', 1500);
+    showToast(isNew ? '추가됨' : '저장됨', 'success', 1500);
   });
   document.getElementById('modal-delete-btn').addEventListener('click', () => {
     if (!modalCtx) return;
@@ -2410,7 +2409,7 @@
     bar.color = color || null;
     syncAnnualModalChanges();
     closeAnnualBarModal();
-    showToast('✓ 저장됨', 'success', 1500);
+    showToast('저장됨', 'success', 1500);
   });
   document.getElementById('annual-modal-delete-btn').addEventListener('click', () => {
     if (!annualModalCtx) return;
