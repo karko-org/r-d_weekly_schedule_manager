@@ -188,6 +188,9 @@
   .modal-dates{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .modal-date-input{width:80px;padding:10px 12px;font-family:var(--mono);font-size:14px;text-align:center;border:1px solid var(--line);background:var(--bg);border-radius:8px;color:var(--ink);font-feature-settings:"tnum"}
   .modal-date-input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+  .modal-date-picker{width:auto;min-width:160px;text-align:left;cursor:pointer}
+  .modal-date-picker::-webkit-calendar-picker-indicator{cursor:pointer;opacity:0.6;filter:invert(30%)}
+  .modal-date-picker:hover::-webkit-calendar-picker-indicator{opacity:1}
   .modal-dates-sep{color:var(--muted);font-size:14px}
   .modal-dates-display{margin-left:auto;font-size:13px;color:var(--muted);font-family:var(--mono);font-feature-settings:"tnum"}
   .modal-notes{padding:12px 14px;font-size:14px;line-height:1.6;border:1px solid var(--line);background:var(--bg);border-radius:8px;font-family:inherit;color:var(--ink);min-height:160px;resize:vertical;width:100%}
@@ -524,9 +527,9 @@
       <div class="modal-field">
         <label class="modal-label">기간</label>
         <div class="modal-dates">
-          <input type="number" class="modal-date-input" id="modal-start-input" min="1" max="31" aria-label="시작일">
-          <span class="modal-dates-sep">-</span>
-          <input type="number" class="modal-date-input" id="modal-end-input" min="1" max="31" aria-label="종료일">
+          <input type="date" class="modal-date-input modal-date-picker" id="modal-start-input" aria-label="시작일">
+          <span class="modal-dates-sep">—</span>
+          <input type="date" class="modal-date-input modal-date-picker" id="modal-end-input" aria-label="종료일">
           <span class="modal-dates-display" id="modal-dates-display"></span>
         </div>
       </div>
@@ -1114,7 +1117,14 @@
       });
     });
     results.sort((a,b) => new Date(a.y,a.m,a.task.start) - new Date(b.y,b.m,b.task.start));
-    return results;
+    // 여러 달 걸친 업무(같은 groupId)가 리스트에 여러 번 나오지 않도록 dedupe — 가장 이른 조각만 남김.
+    const seen = new Set();
+    return results.filter(r => {
+      const gkey = r.task.groupId || r.task.id;
+      if (seen.has(gkey)) return false;
+      seen.add(gkey);
+      return true;
+    });
   }
 
   function renderThisWeek(){
@@ -1166,7 +1176,8 @@
       const endInput = item.querySelector('.tw-day-end');
 
       titleEl.addEventListener('input', e => {
-        task.title = e.target.value; saveAllLocal(); renderCalendar();
+        syncTaskTitleInGroup(task, e.target.value);
+        saveAllLocal(); renderCalendar();
         if (allSectionOpen && y === currentYear && m === currentMonth){
           const twin = document.querySelector(`.all-section .tw-item[data-id="${task.id}"] .tw-title-input`);
           if (twin && document.activeElement !== twin) twin.value = task.title;
@@ -1222,9 +1233,7 @@
       endInput.addEventListener('change', onDayChange);
 
       item.querySelector('.task-remove').addEventListener('click', () => {
-        const mdata = monthData[mk];
-        const idx = mdata.tasks.findIndex(x => x.id === task.id);
-        if (idx >= 0) mdata.tasks.splice(idx, 1);
+        removeTaskOrGroup(task); // 여러 달 조각 전체 제거
         editingTwIds.delete(task.id);
         if (focusedTaskId === task.id) focusedTaskId = null;
         saveAllLocal();
@@ -1275,7 +1284,7 @@
       const editBtn = item.querySelector('.tw-edit');
 
       titleEl.addEventListener('input', e => {
-        task.title = e.target.value;
+        syncTaskTitleInGroup(task, e.target.value);
         saveAllLocal();
         renderCalendar();
         // 같은 업무가 이번주/다음주 섹션에도 있으면 입력 동기화 (포커스 안 뺏김)
@@ -1292,8 +1301,7 @@
       });
 
       item.querySelector('.task-remove').addEventListener('click', () => {
-        const idx = data.tasks.findIndex(x => x.id === task.id);
-        if (idx >= 0) data.tasks.splice(idx, 1);
+        removeTaskOrGroup(task); // 여러 달 조각 전체 제거
         editingTwIds.delete(task.id);
         if (focusedTaskId === task.id) focusedTaskId = null;
         saveAllLocal();
@@ -2137,7 +2145,6 @@
 
   function openTaskModal(task, y, m, isNew){
     modalCtx = { task, y, m, isNew: !!isNew };
-    const days = daysInMonth(y, m);
     const titleInput = document.getElementById('modal-title-input');
     const startInput = document.getElementById('modal-start-input');
     const endInput = document.getElementById('modal-end-input');
@@ -2145,13 +2152,16 @@
     const titleText = document.getElementById('modal-title-text');
     const deleteBtn = document.getElementById('modal-delete-btn');
     titleInput.value = task.title || '';
-    startInput.min = 1; startInput.max = days; startInput.value = task.start;
-    endInput.min = 1; endInput.max = days; endInput.value = task.end;
+    // 여러 달 기간(fullStart/fullEnd)이 있으면 우선, 없으면 현재 조각 y/m/start~end
+    const fullStartIso = task.fullStart || fmtISO(new Date(y, m, task.start));
+    const fullEndIso = task.fullEnd || fmtISO(new Date(y, m, task.end));
+    startInput.value = fullStartIso;
+    endInput.value = fullEndIso;
     notesInput.value = task.notes || '';
     renderColorSwatches('task-modal-swatches', 'task-modal-color-custom', task.color);
     document.getElementById('task-modal-swatches').dataset.selectedColor = task.color || '';
     if (titleText) titleText.textContent = isNew ? '새 업무 추가' : '업무 상세';
-    if (deleteBtn) deleteBtn.hidden = !!isNew; // 신규 추가 모드에서는 삭제 버튼 숨김 (취소=X)
+    if (deleteBtn) deleteBtn.hidden = !!isNew;
     updateModalDatesDisplay();
     document.getElementById('task-modal').classList.add('is-open');
     setTimeout(() => titleInput.focus(), 50);
@@ -2162,17 +2172,24 @@
     modalCtx = null;
   }
 
+  function parseIsoDate(iso){
+    if (!iso) return null;
+    const [ys, ms, ds] = iso.split('-').map(n => parseInt(n, 10));
+    if (!ys || !ms || !ds) return null;
+    return new Date(ys, ms - 1, ds);
+  }
   function updateModalDatesDisplay(){
     if (!modalCtx) return;
-    const { y, m } = modalCtx;
-    const s = parseInt(document.getElementById('modal-start-input').value, 10);
-    const e = parseInt(document.getElementById('modal-end-input').value, 10);
-    if (!Number.isFinite(s) || !Number.isFinite(e)) return;
-    const sd = new Date(y, m, s);
-    const ed = new Date(y, m, e);
-    const display = s === e
-      ? `${m+1}/${s} (${WEEKDAYS_KR[sd.getDay()]})`
-      : `${m+1}/${s}(${WEEKDAYS_KR[sd.getDay()]}) - ${m+1}/${e}(${WEEKDAYS_KR[ed.getDay()]})`;
+    const sIso = document.getElementById('modal-start-input').value;
+    const eIso = document.getElementById('modal-end-input').value;
+    const sd = parseIsoDate(sIso);
+    const ed = parseIsoDate(eIso);
+    if (!sd || !ed) { document.getElementById('modal-dates-display').textContent = ''; return; }
+    const days = Math.max(1, Math.round((ed - sd) / 86400000) + 1);
+    const sameDay = sIso === eIso;
+    const display = sameDay
+      ? `${sd.getMonth()+1}/${sd.getDate()} (${WEEKDAYS_KR[sd.getDay()]})`
+      : `${sd.getMonth()+1}/${sd.getDate()}(${WEEKDAYS_KR[sd.getDay()]}) — ${ed.getMonth()+1}/${ed.getDate()}(${WEEKDAYS_KR[ed.getDay()]}) · 총 ${days}일`;
     document.getElementById('modal-dates-display').textContent = display;
   }
 
@@ -2184,20 +2201,15 @@
     if (allSectionOpen) renderAllTasks();
     if (!document.getElementById('briefing-view').hidden) renderBriefing();
   }
-  // 날짜 변경 시 DOM 정합성만 유지 (객체 수정 없음)
+  // 날짜 변경 시 DOM 정합성만 유지 (객체 수정 없음).
+  // ISO 문자열(YYYY-MM-DD) 기준 — 종료 < 시작이면 종료를 시작과 같게 맞춤.
   const modalOnDateChange = () => {
     if (!modalCtx) return;
-    const { y, m } = modalCtx;
-    const days = daysInMonth(y, m);
     const startEl = document.getElementById('modal-start-input');
     const endEl = document.getElementById('modal-end-input');
-    let s = parseInt(startEl.value, 10);
-    let e = parseInt(endEl.value, 10);
-    if (!Number.isFinite(s)) s = 1;
-    if (!Number.isFinite(e)) e = s;
-    s = Math.max(1, Math.min(days, s));
-    e = Math.max(s, Math.min(days, e));
-    startEl.value = s; endEl.value = e;
+    const sd = parseIsoDate(startEl.value);
+    const ed = parseIsoDate(endEl.value);
+    if (sd && ed && ed < sd) endEl.value = startEl.value;
     updateModalDatesDisplay();
   };
   document.getElementById('modal-start-input').addEventListener('change', modalOnDateChange);
@@ -2216,56 +2228,129 @@
     selectTaskColor('');
   });
 
+  // 인라인 제목 편집 시 같은 그룹(여러 달 업무)의 모든 조각 title 동기화
+  function syncTaskTitleInGroup(task, newTitle){
+    task.title = newTitle;
+    if (!task.groupId) return;
+    Object.keys(monthData).forEach(k => {
+      if (!monthData[k] || !Array.isArray(monthData[k].tasks)) return;
+      monthData[k].tasks.forEach(t => {
+        if (t.groupId === task.groupId && t !== task) t.title = newTitle;
+      });
+    });
+  }
+
+  // 같은 groupId(여러 달 걸친 업무)의 모든 조각을 모든 달에서 제거.
+  // groupId 없으면 task.id로 해당 달에서만 제거.
+  function removeTaskOrGroup(task){
+    if (task.groupId){
+      Object.keys(monthData).forEach(k => {
+        if (monthData[k] && Array.isArray(monthData[k].tasks)){
+          monthData[k].tasks = monthData[k].tasks.filter(t => t.groupId !== task.groupId);
+        }
+      });
+    } else {
+      Object.keys(monthData).forEach(k => {
+        if (monthData[k] && Array.isArray(monthData[k].tasks)){
+          monthData[k].tasks = monthData[k].tasks.filter(t => t.id !== task.id);
+        }
+      });
+    }
+  }
+
+  // sIso ~ eIso 범위를 월 경계로 쪼개 monthData[각 달].tasks에 조각으로 분산 저장.
+  // 모든 조각은 동일 groupId + fullStart/fullEnd 공유해서 추후 한 번에 수정/삭제 가능.
+  function distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color }){
+    const sd = parseIsoDate(sIso);
+    const ed = parseIsoDate(eIso);
+    if (!sd || !ed) return [];
+    const created = [];
+    const cursor = new Date(sd.getFullYear(), sd.getMonth(), 1);
+    while (cursor <= ed){
+      const y2 = cursor.getFullYear();
+      const m2 = cursor.getMonth();
+      const lastDay = daysInMonth(y2, m2);
+      const isStartMonth = (y2 === sd.getFullYear() && m2 === sd.getMonth());
+      const isEndMonth = (y2 === ed.getFullYear() && m2 === ed.getMonth());
+      const dayStart = isStartMonth ? sd.getDate() : 1;
+      const dayEnd = isEndMonth ? ed.getDate() : lastDay;
+      const key = monthKey(y2, m2);
+      if (!monthData[key]) monthData[key] = { tasks: [] };
+      const piece = {
+        id: uid(),
+        groupId,
+        title: title || '',
+        start: dayStart,
+        end: dayEnd,
+        notes: notes || '',
+        color: color || null,
+        fullStart: sIso,
+        fullEnd: eIso
+      };
+      monthData[key].tasks.push(piece);
+      created.push(piece);
+      cursor.setMonth(m2 + 1);
+    }
+    return created;
+  }
+
   document.getElementById('modal-close-btn').addEventListener('click', closeTaskModal);
   document.getElementById('modal-save-btn').addEventListener('click', () => {
     if (!modalCtx) { closeTaskModal(); return; }
     const { task, y, m, isNew } = modalCtx;
-    const days = daysInMonth(y, m);
-    let s = parseInt(document.getElementById('modal-start-input').value, 10);
-    let e = parseInt(document.getElementById('modal-end-input').value, 10);
-    if (!Number.isFinite(s)) s = 1;
-    if (!Number.isFinite(e)) e = s;
-    s = Math.max(1, Math.min(days, s));
-    e = Math.max(s, Math.min(days, e));
-    task.title = document.getElementById('modal-title-input').value;
-    task.start = s;
-    task.end = e;
-    task.notes = document.getElementById('modal-notes-input').value;
-    const color = document.getElementById('task-modal-swatches').dataset.selectedColor || '';
-    task.color = color || null;
-    if (isNew){
-      const data = getMonth(y, m);
-      data.tasks.push(task);
-      focusedTaskId = task.id;
-      // 저장된 날짜가 이번주/다음주 범위에 포함되면 tw 섹션, 아니면 all 섹션 자동 펼침
+    const sIsoRaw = document.getElementById('modal-start-input').value;
+    const eIsoRaw = document.getElementById('modal-end-input').value;
+    const sd = parseIsoDate(sIsoRaw);
+    const ed = parseIsoDate(eIsoRaw);
+    if (!sd || !ed){
+      showToast('시작/종료 날짜를 올바르게 입력하세요', 'error', 2000);
+      return;
+    }
+    // 종료 < 시작이면 swap
+    const sIso = (ed < sd) ? eIsoRaw : sIsoRaw;
+    const eIso = (ed < sd) ? sIsoRaw : eIsoRaw;
+    const title = document.getElementById('modal-title-input').value;
+    const notes = document.getElementById('modal-notes-input').value;
+    const color = document.getElementById('task-modal-swatches').dataset.selectedColor || null;
+
+    // 기존 그룹/태스크 제거 후 월별 조각 재분산
+    const groupId = (!isNew && task.groupId) ? task.groupId : ('g_' + Math.random().toString(36).slice(2, 9));
+    if (!isNew) removeTaskOrGroup(task);
+    const pieces = distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color });
+    focusedTaskId = pieces.length > 0 ? pieces[0].id : null;
+
+    if (isNew && pieces.length > 0){
+      const first = pieces[0];
+      const firstY = parseIsoDate(first.fullStart).getFullYear();
+      const firstM = parseIsoDate(first.fullStart).getMonth();
       const {start: twStart, end: twEnd} = getTwRange();
-      const inTw = taskOverlapsRange(task, y, m, twStart, twEnd);
+      const inTw = pieces.some(p => {
+        // 어떤 조각이라도 이번주 범위에 걸치면 tw 쪽
+        const py = parseIsoDate(p.fullStart).getFullYear();
+        // 각 조각의 월별 y/m은 monthData 키에서 유추 어려우니, fullStart/fullEnd 범위로 간단히 체크
+        return parseIsoDate(p.fullStart) <= twEnd && parseIsoDate(p.fullEnd) >= twStart;
+      });
       if (inTw){
         if (twCollapsed) setTwCollapsed(false);
       } else {
         if (!allSectionOpen) toggleAllSection(true);
       }
     }
+
     syncModalChanges();
     closeTaskModal();
     showToast(isNew ? '✓ 추가됨' : '✓ 저장됨', 'success', 1500);
   });
   document.getElementById('modal-delete-btn').addEventListener('click', () => {
     if (!modalCtx) return;
-    const { task, y, m, isNew } = modalCtx;
+    const { task, isNew } = modalCtx;
     if (isNew){
-      // 아직 추가되지 않은 상태 — 그냥 닫기
       closeTaskModal();
       return;
     }
     const titleSnippet = task.title ? `"${task.title}"` : '(제목 없는) 업무';
     if (!confirm(`${titleSnippet}를 삭제하시겠습니까?`)) return;
-    const key = monthKey(y, m);
-    const data = monthData[key];
-    if (data){
-      const idx = data.tasks.findIndex(t => t.id === task.id);
-      if (idx >= 0) data.tasks.splice(idx, 1);
-    }
+    removeTaskOrGroup(task); // 여러 달 조각 전체 제거
     editingTwIds.delete(task.id);
     if (focusedTaskId === task.id) focusedTaskId = null;
     saveAllLocal();
