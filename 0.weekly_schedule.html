@@ -2191,10 +2191,7 @@
     renderThisWeek();
     if (allSectionOpen) renderAllTasks();
   });
-  // Click outside to close
-  document.getElementById('task-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'task-modal') closeTaskModal();
-  });
+  // (바깥 클릭으로 닫기는 실수 방지 위해 제거 — X 또는 저장 버튼으로만 닫힘)
 
   // ---------- Annual Bar Modal ----------
   let annualModalCtx = null; // { project, bar, annual }
@@ -2430,9 +2427,7 @@
     closeAnnualBarModal();
     if (currentView === 'annual') renderAnnual();
   });
-  document.getElementById('annual-bar-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'annual-bar-modal') closeAnnualBarModal();
-  });
+  // (바깥 클릭으로 닫기는 실수 방지 위해 제거 — X 또는 저장 버튼으로만 닫힘)
 
   // ---------- Annual View (Sheet1) ----------
   function setView(kind){
