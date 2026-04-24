@@ -282,7 +282,7 @@
       <button class="btn-secondary" id="btn-export-new">새 파일로 내보내기</button>
     </div>
     <button class="btn-secondary" id="btn-connect">📂 엑셀 파일 연결</button>
-    <button class="btn-save" id="btn-save" disabled>💾 저장</button>
+    <button class="btn-save" id="btn-save" disabled>저장</button>
   </div>
   <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
 
@@ -380,7 +380,7 @@
 
   <p class="hint">
     <strong>처음 사용:</strong> <kbd>📂 엑셀 파일 연결</kbd>로 엑셀 파일 선택 → 기존 내용 불러오기 + 그 파일에 저장 가능해집니다<br>
-    <strong>이후:</strong> <kbd>💾 저장</kbd> 또는 <kbd>Ctrl+S</kbd> 누르면 연결된 파일에 조용히 덮어쓰기됩니다<br>
+    <strong>이후:</strong> <kbd>저장</kbd> 또는 <kbd>Ctrl+S</kbd> 누르면 연결된 파일에 조용히 덮어쓰기됩니다<br>
     <span style="color:var(--muted);font-size:11px">※ 파일 연결 창은 자동으로 이전에 선택한 엑셀 파일이 있던 폴더에서 열립니다</span>
   </p>
 </main>
@@ -961,7 +961,7 @@
       el.className = 'file-status';
       el.innerHTML = `<span class="file-status-icon">⊘</span><span class="file-status-text">파일 미연결</span>`;
       saveBtn.disabled = true;
-      saveBtn.textContent = '💾 저장';
+      saveBtn.textContent = '저장';
     } else {
       el.className = 'file-status is-connected';
       const name = fileHandle.name || 'file.xlsx';
@@ -973,7 +973,7 @@
       `;
       document.getElementById('disconnect-btn').addEventListener('click', (e) => { e.stopPropagation(); disconnectFile(); });
       saveBtn.disabled = !isDirty;
-      saveBtn.textContent = isDirty ? '💾 저장' : '✓ 저장됨';
+      saveBtn.textContent = isDirty ? '저장' : '✓ 저장됨';
     }
   }
 
@@ -985,7 +985,7 @@
       return;
     }
     saveBtn.disabled = !isDirty;
-    saveBtn.textContent = isDirty ? '💾 저장' : '✓ 저장됨';
+    saveBtn.textContent = isDirty ? '저장' : '✓ 저장됨';
     // Also update status label
     const statusText = document.querySelector('#file-status .file-status-text');
     if (statusText) statusText.textContent = isDirty ? '변경됨' : '동기화됨';
