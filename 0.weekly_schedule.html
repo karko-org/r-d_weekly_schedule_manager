@@ -87,6 +87,12 @@
   .cal-bg.is-weekend{background:var(--weekend)}
   .cal-bg.is-sunday{background:var(--sunday)}
   .cal-bg.is-highlight{background:var(--this-week)}
+  /* 펼치기 모드에서 표시되는 전달/다음달 셀 — 시각적으로 흐리게 */
+  .cal-day-num.is-other-month{opacity:0.5;background:var(--bg);color:var(--muted)}
+  .cal-weekday.is-other-month{opacity:0.5;background:var(--bg)}
+  .cal-bg.is-other-month{background:var(--bg);opacity:0.7}
+  /* 다른 달의 1일 셀에는 작게 월 표시 */
+  .cal-day-num.is-month-start::after{content:attr(data-month);display:block;font-size:9px;opacity:0.7;margin-top:1px}
   .cal-task-bar{display:flex;align-items:center;padding:4px 8px;font-size:12px;font-weight:500;background:#ffffff;color:var(--ink);border-radius:6px;margin:3px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:30px;border:1px solid var(--line);transition:all .15s;cursor:pointer;z-index:1}
   .cal-task-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink);z-index:2}
   .cal-task-bar.is-focused{box-shadow:0 0 0 2px var(--today)}
@@ -275,7 +281,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.13</span>
+      <span class="version">v1.0.14</span>
     </div>
   </header>
 
@@ -1006,13 +1012,107 @@
     document.getElementById('all-section-badge').textContent = `${currentYear}년 ${currentMonth+1}월 전체 업무`;
   }
 
+  // 캘린더에 표시할 날짜 배열 생성 — 펼치기 모드면 전후 7일씩 추가
+  const MS_PER_DAY = 86400000;
+  function buildCalendarDates(){
+    const days = daysInMonth(currentYear, currentMonth);
+    const PRE = calendarExpanded ? 7 : 0;
+    const POST = calendarExpanded ? 7 : 0;
+    const start = addDays(new Date(currentYear, currentMonth, 1), -PRE);
+    start.setHours(0,0,0,0);
+    const total = PRE + days + POST;
+    const arr = [];
+    for (let i = 0; i < total; i++){
+      const dt = addDays(start, i); dt.setHours(0,0,0,0);
+      arr.push({
+        y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(),
+        weekday: dt.getDay(), date: dt,
+        isCurrentMonth: (dt.getFullYear() === currentYear && dt.getMonth() === currentMonth)
+      });
+    }
+    return arr;
+  }
+  function dateColIndex(dates, dt){
+    if (!dates.length) return -1;
+    const x = new Date(dt); x.setHours(0,0,0,0);
+    return Math.round((x - dates[0].date) / MS_PER_DAY);
+  }
+  // 펼치기 모드: range에 걸친 모든 task 조각을 groupId 단위로 합쳐 하나의 가상 task로 반환
+  function collectExpandedTasks(rangeStart, rangeEnd){
+    const monthsToCheck = new Set();
+    let cur = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+    const last = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+    while (cur <= last){
+      monthsToCheck.add(monthKey(cur.getFullYear(), cur.getMonth()));
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    const groups = new Map();
+    monthsToCheck.forEach(key => {
+      if (!monthData[key]) return;
+      const parts = key.split('-');
+      const y = parseInt(parts[0],10);
+      const m = parseInt(parts[1],10) - 1;
+      monthData[key].tasks.forEach(t => {
+        if (!taskOverlapsRange(t,y,m,rangeStart,rangeEnd)) return;
+        const ts = new Date(y, m, t.start); ts.setHours(0,0,0,0);
+        const te = new Date(y, m, t.end);   te.setHours(0,0,0,0);
+        const gkey = t.groupId || t.id;
+        if (!groups.has(gkey)){
+          groups.set(gkey, { task:t, startDate:ts, endDate:te, y, m });
+        } else {
+          const g = groups.get(gkey);
+          if (ts < g.startDate){ g.startDate = ts; g.task = t; g.y = y; g.m = m; }
+          if (te > g.endDate){ g.endDate = te; }
+        }
+      });
+    });
+    return Array.from(groups.values());
+  }
+
   function renderCalendar(){
     const grid = document.getElementById('calendar');
-    const days = daysInMonth(currentYear, currentMonth);
-    const { rowCount, ordered } = assignRows(getMonth(currentYear,currentMonth).tasks);
+    const dates = buildCalendarDates();
+    const total = dates.length;
+    const rangeStart = dates[0].date;
+    const rangeEnd = dates[total-1].date;
+
+    // task → 컬럼 매핑
+    const calTasks = [];
+    if (calendarExpanded){
+      const groups = collectExpandedTasks(rangeStart, rangeEnd);
+      groups.forEach(({task, startDate, endDate, y, m}) => {
+        const sCol = Math.max(0, dateColIndex(dates, startDate));
+        const eCol = Math.min(total - 1, dateColIndex(dates, endDate));
+        if (eCol < 0 || sCol > total - 1) return;
+        calTasks.push({
+          ...task, _startCol:sCol, _endCol:eCol, _origY:y, _origM:m,
+          _clippedStart: startDate < rangeStart, _clippedEnd: endDate > rangeEnd
+        });
+      });
+    } else {
+      // 기본 모드: 현재 달의 task만, _startCol = start-1
+      getMonth(currentYear, currentMonth).tasks.forEach(t => {
+        calTasks.push({
+          ...t, _startCol:t.start-1, _endCol:t.end-1,
+          _origY:currentYear, _origM:currentMonth,
+          _clippedStart:false, _clippedEnd:false
+        });
+      });
+    }
+    // 컬럼 기반 행 배치
+    calTasks.sort((a,b) => a._startCol - b._startCol || a._endCol - b._endCol);
+    const rows = [];
+    calTasks.forEach(t => {
+      let placed = false;
+      for (let i = 0; i < rows.length; i++){
+        if (rows[i] < t._startCol){ t._row = i; rows[i] = t._endCol; placed = true; break; }
+      }
+      if (!placed){ t._row = rows.length; rows.push(t._endCol); }
+    });
+    const rowCount = Math.max(1, rows.length);
 
     const dayCol = calendarExpanded ? `${CAL_EXPANDED_DAY_WIDTH}px` : 'minmax(26px, 1fr)';
-    grid.style.gridTemplateColumns = `56px repeat(${days}, ${dayCol})`;
+    grid.style.gridTemplateColumns = `56px repeat(${total}, ${dayCol})`;
     grid.style.gridTemplateRows = `auto auto repeat(${rowCount}, auto)`;
     grid.classList.toggle('is-expanded', calendarExpanded);
     grid.innerHTML = '';
@@ -1022,17 +1122,24 @@
     corner.textContent = `   일\n달`;
     grid.appendChild(corner);
 
-    for (let d = 1; d <= days; d++){
+    // 일자 헤더
+    dates.forEach((meta, i) => {
       const el = document.createElement('div');
       el.className = 'cal-day-num';
-      if (isTodayDay(currentYear,currentMonth,d)) el.classList.add('is-today');
-      else if (isInRange(currentYear,currentMonth,d,thisMon,thisFri)) el.classList.add('is-highlight');
-      el.textContent = d;
+      if (isTodayDay(meta.y, meta.m, meta.d)) el.classList.add('is-today');
+      else if (isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) el.classList.add('is-highlight');
+      if (!meta.isCurrentMonth) el.classList.add('is-other-month');
+      if (!meta.isCurrentMonth && meta.d === 1){
+        el.classList.add('is-month-start');
+        el.setAttribute('data-month', `${meta.m+1}월`);
+      }
+      el.textContent = meta.d;
       el.style.gridRow = '1';
-      el.style.gridColumn = String(d+1);
+      el.style.gridColumn = String(i + 2);
       grid.appendChild(el);
-    }
+    });
 
+    // 좌측 월 라벨 (현재 달 표시)
     const monthLabel = document.createElement('div');
     monthLabel.className = 'cal-corner';
     monthLabel.style.gridColumn = '1';
@@ -1044,35 +1151,38 @@
     monthLabel.textContent = `${currentMonth+1}월`;
     grid.appendChild(monthLabel);
 
-    for (let d = 1; d <= days; d++){
-      const wd = weekdayOf(currentYear,currentMonth,d);
+    // 요일 헤더
+    dates.forEach((meta, i) => {
       const el = document.createElement('div');
       el.className = 'cal-weekday';
-      if (wd === 0) el.classList.add('is-sun');
-      if (wd === 6) el.classList.add('is-sat');
-      if (isTodayDay(currentYear,currentMonth,d)) el.classList.add('is-today');
-      else if (isInRange(currentYear,currentMonth,d,thisMon,thisFri)) el.classList.add('is-highlight');
-      el.textContent = WEEKDAYS_KR[wd];
+      if (meta.weekday === 0) el.classList.add('is-sun');
+      if (meta.weekday === 6) el.classList.add('is-sat');
+      if (isTodayDay(meta.y, meta.m, meta.d)) el.classList.add('is-today');
+      else if (isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) el.classList.add('is-highlight');
+      if (!meta.isCurrentMonth) el.classList.add('is-other-month');
+      el.textContent = WEEKDAYS_KR[meta.weekday];
       el.style.gridRow = '2';
-      el.style.gridColumn = String(d+1);
+      el.style.gridColumn = String(i + 2);
       grid.appendChild(el);
-    }
+    });
 
+    // 배경 셀
     for (let r = 0; r < rowCount; r++){
-      for (let d = 1; d <= days; d++){
+      dates.forEach((meta, i) => {
         const bg = document.createElement('div');
         bg.className = 'cal-bg';
-        const wd = weekdayOf(currentYear,currentMonth,d);
-        if (wd === 0) bg.classList.add('is-sunday');
-        else if (wd === 6) bg.classList.add('is-weekend');
-        if (isInRange(currentYear,currentMonth,d,thisMon,thisFri)) bg.classList.add('is-highlight');
+        if (meta.weekday === 0) bg.classList.add('is-sunday');
+        else if (meta.weekday === 6) bg.classList.add('is-weekend');
+        if (isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) bg.classList.add('is-highlight');
+        if (!meta.isCurrentMonth) bg.classList.add('is-other-month');
         bg.style.gridRow = String(3 + r);
-        bg.style.gridColumn = String(d+1);
+        bg.style.gridColumn = String(i + 2);
         grid.appendChild(bg);
-      }
+      });
     }
 
-    ordered.forEach(t => {
+    // task 바
+    calTasks.forEach(t => {
       const bar = document.createElement('div');
       bar.className = 'cal-task-bar';
       if (t.id === focusedTaskId) bar.classList.add('is-focused');
@@ -1084,18 +1194,18 @@
       }
       const titleStr = t.title || '(제목 없음)';
       bar.textContent = titleStr;
-      bar.title = `${titleStr}\n${currentMonth+1}/${t.start} ~ ${currentMonth+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
+      bar.title = `${titleStr}\n${t._origM+1}/${t.start} ~ ${t._origM+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
       bar.style.gridRow = String(3 + t._row);
-      bar.style.gridColumn = `${t.start+1} / ${t.end+2}`;
+      bar.style.gridColumn = `${t._startCol + 2} / ${t._endCol + 3}`;
       bar.addEventListener('click', () => {
         focusedTaskId = t.id;
         renderCalendar();
-        openTaskModal(t, currentYear, currentMonth);
+        openTaskModal(t, t._origY, t._origM);
       });
       grid.appendChild(bar);
     });
 
-    // 펼치기 모드면 이번주가 보이도록 자동 스크롤 (다른 달 보고 있으면 무시)
+    // 펼치기 모드면 이번주가 보이도록 자동 스크롤 (이번주 셀이 표시 범위에 없으면 무시)
     requestAnimationFrame(scrollToThisWeek);
   }
 
@@ -1104,9 +1214,6 @@
     const wrap = document.querySelector('.calendar-wrap');
     const grid = document.getElementById('calendar');
     if (!wrap || !grid) return;
-    // 보고 있는 달이 thisMon이 속한 달과 다르면 스크롤하지 않음
-    if (!thisMon) return;
-    if (thisMon.getFullYear() !== currentYear || thisMon.getMonth() !== currentMonth) return;
     // 캘린더에서 이번주 첫 셀(.cal-day-num.is-highlight) 위치로 스크롤
     const firstHighlight = grid.querySelector('.cal-day-num.is-highlight, .cal-day-num.is-today');
     if (!firstHighlight) return;
