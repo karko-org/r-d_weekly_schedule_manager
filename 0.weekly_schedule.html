@@ -73,6 +73,10 @@
   .cal-expand-btn[aria-pressed="true"]{background:var(--accent-mid);color:var(--bar-accent-ink);border-color:var(--accent-mid)}
 
   .calendar-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px;overflow-x:auto}
+  /* 드래그로 좌우 스크롤 — 펼치기 모드에서만 grab 커서 노출 */
+  .calendar-wrap:has(.calendar.is-expanded){cursor:grab}
+  .calendar-wrap.is-dragging{cursor:grabbing!important;user-select:none}
+  .calendar-wrap.is-dragging .cal-task-bar{cursor:grabbing!important}
   .calendar{display:grid;gap:0;min-width:800px}
   .cal-corner{grid-column:1;grid-row:1 / span 2;background:var(--bg);border:1px solid var(--line-soft);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);text-align:center;padding:6px;line-height:1.3;white-space:pre}
   .cal-day-num{grid-row:1;border:1px solid var(--line-soft);padding:8px 2px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink-2);background:var(--bg)}
@@ -281,7 +285,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.14</span>
+      <span class="version">v1.0.15</span>
     </div>
   </header>
 
@@ -2794,6 +2798,48 @@
     renderCalendar();
   });
   syncCalendarExpandBtn();
+
+  // 캘린더 클릭&드래그로 좌우 스크롤 — 미세 조정은 휠/트랙패드, 큰 이동은 드래그
+  (function setupCalendarDragScroll(){
+    const wrap = document.querySelector('.calendar-wrap');
+    if (!wrap) return;
+    const DRAG_THRESHOLD = 5; // 이 이상 움직여야 드래그로 간주, 그 이하는 클릭
+    let isDown = false, didDrag = false, startX = 0, startScroll = 0;
+
+    wrap.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // 좌클릭만
+      // 입력/선택 요소는 드래그 시작 안 함
+      if (e.target.closest('input, button, select, textarea, a')) return;
+      isDown = true; didDrag = false;
+      startX = e.pageX; startScroll = wrap.scrollLeft;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDown) return;
+      const dx = e.pageX - startX;
+      if (!didDrag && Math.abs(dx) >= DRAG_THRESHOLD){
+        didDrag = true;
+        wrap.classList.add('is-dragging');
+      }
+      if (didDrag){
+        wrap.scrollLeft = startScroll - dx;
+        e.preventDefault();
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!isDown) return;
+      if (didDrag){
+        // 드래그 직후 발생할 click 이벤트 1회 차단 — task bar가 잘못 열리지 않도록
+        const blocker = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+        document.addEventListener('click', blocker, { capture:true, once:true });
+        // 안전장치: click이 발생하지 않은 경우(드물게) 다음 tick에 정리
+        setTimeout(() => document.removeEventListener('click', blocker, true), 0);
+      }
+      isDown = false; didDrag = false;
+      wrap.classList.remove('is-dragging');
+    });
+  })();
   function bindSortSelects({ fieldId, dirId, fieldKey, dirKey, getField, getDir, setField, setDir, onChange }){
     const fieldSel = document.getElementById(fieldId);
     const dirSel = document.getElementById(dirId);
