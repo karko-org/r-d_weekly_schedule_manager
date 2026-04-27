@@ -68,6 +68,9 @@
   .reset-btn:hover{background:var(--accent);color:var(--surface)}
   .add-log-btn{padding:10px 18px;font-size:13px;font-weight:700;color:var(--surface);background:var(--accent);border-radius:8px;transition:all .15s;letter-spacing:-0.01em;font-family:inherit;white-space:nowrap}
   .add-log-btn:hover{background:var(--ink)}
+  .cal-expand-btn{padding:10px 14px;font-size:13px;font-weight:600;color:var(--ink-2);background:var(--bg);border:1px solid var(--line);border-radius:8px;transition:all .15s;white-space:nowrap;font-family:inherit}
+  .cal-expand-btn:hover{border-color:var(--ink);color:var(--ink)}
+  .cal-expand-btn[aria-pressed="true"]{background:var(--accent-mid);color:var(--bar-accent-ink);border-color:var(--accent-mid)}
 
   .calendar-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px;overflow-x:auto}
   .calendar{display:grid;gap:0;min-width:800px}
@@ -272,7 +275,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.12</span>
+      <span class="version">v1.0.13</span>
     </div>
   </header>
 
@@ -298,6 +301,7 @@
       <div class="month-title" id="month-title"></div>
     </div>
     <button class="nav-btn" id="next-month" aria-label="다음 달">▶</button>
+    <button class="cal-expand-btn" id="cal-expand-btn" aria-pressed="false" title="달력을 가로로 넓혀 업무 제목을 충분히 표시합니다">📐 달력 펼치기</button>
     <button class="add-log-btn" id="add-log-btn">＋ 업무 일지 추가</button>
   </section>
 
@@ -491,6 +495,9 @@
   const ALL_SORT_DIR_KEY = 'kar_all_sort_dir_v1';     // 'asc' | 'desc'
   const TW_SORT_FIELD_KEY = 'kar_tw_sort_field_v1';
   const TW_SORT_DIR_KEY = 'kar_tw_sort_dir_v1';
+  const CAL_EXPANDED_KEY = 'kar_calendar_expanded_v1';
+  const CAL_EXPANDED_DAY_WIDTH = 110; // 펼침 모드에서 날짜 셀 너비 (px)
+  let calendarExpanded = localStorage.getItem(CAL_EXPANDED_KEY) === '1';
 
   const FS_API_SUPPORTED = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 
@@ -1004,8 +1011,10 @@
     const days = daysInMonth(currentYear, currentMonth);
     const { rowCount, ordered } = assignRows(getMonth(currentYear,currentMonth).tasks);
 
-    grid.style.gridTemplateColumns = `56px repeat(${days}, minmax(26px, 1fr))`;
+    const dayCol = calendarExpanded ? `${CAL_EXPANDED_DAY_WIDTH}px` : 'minmax(26px, 1fr)';
+    grid.style.gridTemplateColumns = `56px repeat(${days}, ${dayCol})`;
     grid.style.gridTemplateRows = `auto auto repeat(${rowCount}, auto)`;
+    grid.classList.toggle('is-expanded', calendarExpanded);
     grid.innerHTML = '';
 
     const corner = document.createElement('div');
@@ -1085,6 +1094,23 @@
       });
       grid.appendChild(bar);
     });
+
+    // 펼치기 모드면 이번주가 보이도록 자동 스크롤 (다른 달 보고 있으면 무시)
+    requestAnimationFrame(scrollToThisWeek);
+  }
+
+  function scrollToThisWeek(){
+    if (!calendarExpanded) return;
+    const wrap = document.querySelector('.calendar-wrap');
+    const grid = document.getElementById('calendar');
+    if (!wrap || !grid) return;
+    // 보고 있는 달이 thisMon이 속한 달과 다르면 스크롤하지 않음
+    if (!thisMon) return;
+    if (thisMon.getFullYear() !== currentYear || thisMon.getMonth() !== currentMonth) return;
+    // 캘린더에서 이번주 첫 셀(.cal-day-num.is-highlight) 위치로 스크롤
+    const firstHighlight = grid.querySelector('.cal-day-num.is-highlight, .cal-day-num.is-today');
+    if (!firstHighlight) return;
+    wrap.scrollLeft = Math.max(0, firstHighlight.offsetLeft - 60);
   }
 
   function getTasksOverlappingRange(rangeStart, rangeEnd){
@@ -2647,6 +2673,20 @@
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('add-log-btn').addEventListener('click', addTaskLog);
   document.getElementById('all-collapse-btn').addEventListener('click', () => toggleAllSection());
+
+  function syncCalendarExpandBtn(){
+    const btn = document.getElementById('cal-expand-btn');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', String(calendarExpanded));
+    btn.textContent = calendarExpanded ? '📐 달력 접기' : '📐 달력 펼치기';
+  }
+  document.getElementById('cal-expand-btn').addEventListener('click', () => {
+    calendarExpanded = !calendarExpanded;
+    localStorage.setItem(CAL_EXPANDED_KEY, calendarExpanded ? '1' : '0');
+    syncCalendarExpandBtn();
+    renderCalendar();
+  });
+  syncCalendarExpandBtn();
   function bindSortSelects({ fieldId, dirId, fieldKey, dirKey, getField, getDir, setField, setDir, onChange }){
     const fieldSel = document.getElementById(fieldId);
     const dirSel = document.getElementById(dirId);
