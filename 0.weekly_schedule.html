@@ -272,7 +272,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0</span>
+      <span class="version">v1.0.12</span>
     </div>
   </header>
 
@@ -423,7 +423,6 @@
       </div>
     </div>
     <div class="modal-footer">
-      <span class="modal-hint">💡 입력 즉시 저장됩니다 · ESC로 닫기</span>
       <div class="modal-actions">
         <button class="modal-delete-btn" id="annual-modal-delete-btn">삭제</button>
         <button class="modal-save-btn" id="annual-modal-save-btn">저장</button>
@@ -469,7 +468,6 @@
       </div>
     </div>
     <div class="modal-footer">
-      <span class="modal-hint">💡 입력 즉시 저장됩니다 · ESC로 닫기</span>
       <div class="modal-actions">
         <button class="modal-delete-btn" id="modal-delete-btn">삭제</button>
         <button class="modal-save-btn" id="modal-save-btn">저장</button>
@@ -2731,13 +2729,11 @@
       else if (FS_API_SUPPORTED) showToast('먼저 📂 엑셀 파일 연결을 해주세요', 'error');
       return;
     }
-    // Modal open: ESC closes modal (takes priority over other handlers)
+    // Modal open: 다른 핸들러가 동작하지 않도록 차단 (ESC 닫기는 비활성화 — 실수 방지)
     if (document.getElementById('task-modal').classList.contains('is-open')){
-      if (e.key === 'Escape') closeTaskModal();
       return;
     }
     if (document.getElementById('annual-bar-modal').classList.contains('is-open')){
-      if (e.key === 'Escape') closeAnnualBarModal();
       return;
     }
   });
