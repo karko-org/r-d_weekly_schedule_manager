@@ -97,12 +97,28 @@
   .cal-bg.is-other-month{background:var(--bg);opacity:0.7}
   /* 다른 달의 1일 셀에는 작게 월 표시 */
   .cal-day-num.is-month-start::after{content:attr(data-month);display:block;font-size:9px;opacity:0.7;margin-top:1px}
-  .cal-task-bar{display:flex;align-items:center;padding:4px 8px;font-size:12px;font-weight:500;background:#ffffff;color:var(--ink);border-radius:6px;margin:3px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:30px;border:1px solid var(--line);transition:all .15s;cursor:pointer;z-index:1}
+  .cal-task-bar{display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;font-weight:500;background:#ffffff;color:var(--ink);border-radius:6px;margin:3px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:30px;border:1px solid var(--line);transition:all .15s;cursor:pointer;z-index:1}
   .cal-task-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink);z-index:2}
   .cal-task-bar.is-focused{box-shadow:0 0 0 2px var(--today)}
   /* 원본 엑셀 색상이 있는 월간 바는 호버 시에도 색상 유지 */
   .cal-task-bar.has-custom-color:hover{filter:brightness(0.92);box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:2}
   .cal-task-bar.has-custom-color.is-focused{box-shadow:0 0 0 2px var(--today)}
+  /* 완료 체크박스 (task bar 좌측 + 리스트 좌측 공용) */
+  .done-toggle{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1.5px solid var(--muted);border-radius:4px;background:transparent;color:transparent;font-size:11px;font-weight:900;line-height:1;flex:0 0 16px;transition:all .12s;cursor:pointer}
+  .done-toggle:hover{border-color:var(--ink);background:rgba(255,255,255,0.5)}
+  .done-toggle.is-checked{background:var(--success);border-color:var(--success);color:#fff}
+  .done-toggle.is-checked::before{content:"\2713"}
+  /* 완료 처리된 task bar / 리스트 항목 — 취소선 + 회색 톤 */
+  .cal-task-bar.is-done{opacity:0.55;filter:grayscale(0.7);text-decoration:line-through;text-decoration-thickness:1.5px}
+  .cal-task-bar.is-done:hover{opacity:0.9}
+  .tw-item.is-done .tw-title-input{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--muted)}
+  .tw-item.is-done{opacity:0.7;background:#f5f3ed}
+  /* 모달 안의 완료 체크박스 */
+  .modal-done-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border:1px solid var(--line-soft);border-radius:8px;cursor:pointer;user-select:none;transition:all .12s}
+  .modal-done-row:hover{border-color:var(--muted)}
+  .modal-done-row.is-checked{background:var(--success-bg);border-color:var(--success)}
+  .modal-done-row .modal-done-text{font-size:13px;font-weight:600;color:var(--ink-2)}
+  .modal-done-row.is-checked .modal-done-text{color:var(--success)}
 
   .tw-section{background:var(--this-week);border:1px solid var(--this-week-border);border-radius:12px;padding:18px 22px;margin-bottom:14px;transition:padding .15s}
   .tw-section.is-collapsed{padding-bottom:14px}
@@ -125,7 +141,7 @@
   .tw-week-toggle-btn.is-active:hover{color:var(--bar-accent-ink)}
   .task-count{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:500}
   .tw-list{display:flex;flex-direction:column;gap:6px}
-  .tw-item{display:grid;grid-template-columns:1fr 140px 28px 28px;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;background:var(--surface);border:1px solid transparent;transition:all .12s}
+  .tw-item{display:grid;grid-template-columns:22px 1fr 140px 28px 28px;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;background:var(--surface);border:1px solid transparent;transition:all .12s}
   .tw-item:focus-within{border-color:var(--accent)}
   .tw-item.is-editing{border-color:var(--accent);background:var(--accent-soft)}
   .tw-title-input{font-size:14px;padding:8px 10px;border:1px solid transparent;background:var(--bg);border-radius:6px;font-weight:500}
@@ -285,7 +301,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.15</span>
+      <span class="version">v1.0.16</span>
     </div>
   </header>
 
@@ -453,6 +469,12 @@
       <button class="modal-close" id="modal-close-btn" aria-label="닫기">×</button>
     </div>
     <div class="modal-body">
+      <div class="modal-field">
+        <label class="modal-done-row" id="modal-done-row">
+          <span class="done-toggle" id="modal-done-toggle" role="checkbox" aria-checked="false" tabindex="0"></span>
+          <span class="modal-done-text">완료된 업무로 표시</span>
+        </label>
+      </div>
       <div class="modal-field">
         <label class="modal-label" for="modal-title-input">업무 제목</label>
         <input type="text" class="modal-input" id="modal-title-input" placeholder="업무 내용">
@@ -770,7 +792,7 @@
         Object.entries(importResult.monthly.parsed).forEach(([key, tasks]) => {
           if (!monthData[key]) monthData[key] = { tasks: [] };
           tasks.forEach(t => {
-            monthData[key].tasks.push({ id: uid(), title: t.title, start: t.start, end: t.end, notes: t.notes || '', color: t.color || null });
+            monthData[key].tasks.push({ id: uid(), title: t.title, start: t.start, end: t.end, notes: t.notes || '', color: t.color || null, done: !!t.done });
           });
         });
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
@@ -1190,15 +1212,34 @@
       const bar = document.createElement('div');
       bar.className = 'cal-task-bar';
       if (t.id === focusedTaskId) bar.classList.add('is-focused');
+      if (t.done) bar.classList.add('is-done');
       if (t.color){
         bar.classList.add('has-custom-color');
         bar.style.background = '#' + t.color;
         const textColor = contrastTextColor(t.color);
         if (textColor) bar.style.color = textColor;
       }
+      // 좌측 체크박스 — 클릭 시 모달 안 열고 토글만
+      const toggle = document.createElement('span');
+      toggle.className = 'done-toggle' + (t.done ? ' is-checked' : '');
+      toggle.setAttribute('role','checkbox');
+      toggle.setAttribute('aria-checked', String(!!t.done));
+      toggle.title = t.done ? '완료 해제' : '완료로 표시';
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleTaskDone(t);
+      });
+      bar.appendChild(toggle);
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'cal-task-title';
+      titleSpan.style.overflow = 'hidden';
+      titleSpan.style.textOverflow = 'ellipsis';
+      titleSpan.style.whiteSpace = 'nowrap';
+      titleSpan.style.flex = '1';
       const titleStr = t.title || '(제목 없음)';
-      bar.textContent = titleStr;
-      bar.title = `${titleStr}\n${t._origM+1}/${t.start} ~ ${t._origM+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
+      titleSpan.textContent = titleStr;
+      bar.appendChild(titleSpan);
+      bar.title = `${titleStr}${t.done ? ' [완료]' : ''}\n${t._origM+1}/${t.start} ~ ${t._origM+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
       bar.style.gridRow = String(3 + t._row);
       bar.style.gridColumn = `${t._startCol + 2} / ${t._endCol + 3}`;
       bar.addEventListener('click', () => {
@@ -1273,6 +1314,7 @@
       const item = document.createElement('div');
       item.className = 'tw-item';
       if (editingTwIds.has(task.id)) item.classList.add('is-editing');
+      if (task.done) item.classList.add('is-done');
       item.dataset.id = task.id;
       const days = daysInMonth(y, m);
       const startD = new Date(y, m, task.start);
@@ -1282,6 +1324,7 @@
         ? `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]})`
         : `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]}) - ${endD.getMonth()+1}/${endD.getDate()}(${WEEKDAYS_KR[endD.getDay()]})`;
       item.innerHTML = `
+        <span class="done-toggle ${task.done ? 'is-checked' : ''}" role="checkbox" aria-checked="${!!task.done}" tabindex="0" title="${task.done ? '완료 해제' : '완료로 표시'}"></span>
         <input class="tw-title-input" placeholder="업무 내용" value="${escapeAttr(task.title)}">
         <div class="tw-dates-cell">
           <div class="tw-dates">${dateStr}</div>
@@ -1298,6 +1341,11 @@
       const editBtn = item.querySelector('.tw-edit');
       const startInput = item.querySelector('.tw-day-start');
       const endInput = item.querySelector('.tw-day-end');
+      const doneToggle = item.querySelector('.done-toggle');
+      doneToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleTaskDone(task); });
+      doneToggle.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); toggleTaskDone(task); }
+      });
 
       titleEl.addEventListener('input', e => {
         syncTaskTitleInGroup(task, e.target.value);
@@ -1397,6 +1445,7 @@
     sorted.forEach(task => {
       const item = document.createElement('div');
       item.className = 'tw-item';
+      if (task.done) item.classList.add('is-done');
       item.dataset.id = task.id;
       const startD = new Date(y, m, task.start);
       const endD = new Date(y, m, task.end);
@@ -1405,6 +1454,7 @@
         ? `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]})`
         : `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]}) - ${endD.getMonth()+1}/${endD.getDate()}(${WEEKDAYS_KR[endD.getDay()]})`;
       item.innerHTML = `
+        <span class="done-toggle ${task.done ? 'is-checked' : ''}" role="checkbox" aria-checked="${!!task.done}" tabindex="0" title="${task.done ? '완료 해제' : '완료로 표시'}"></span>
         <input class="tw-title-input" placeholder="업무 내용" value="${escapeAttr(task.title)}">
         <div class="tw-dates-cell">
           <div class="tw-dates">${dateStr}</div>
@@ -1414,6 +1464,11 @@
       `;
       const titleEl = item.querySelector('.tw-title-input');
       const editBtn = item.querySelector('.tw-edit');
+      const doneToggle = item.querySelector('.done-toggle');
+      doneToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleTaskDone(task); });
+      doneToggle.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); toggleTaskDone(task); }
+      });
 
       titleEl.addEventListener('input', e => {
         syncTaskTitleInGroup(task, e.target.value);
@@ -1467,7 +1522,7 @@
     } else if (y === todayY && m === todayM){
       start = todayD; end = todayD;
     }
-    const placeholder = { id: uid(), title: '', start, end, notes: '', color: null };
+    const placeholder = { id: uid(), title: '', start, end, notes: '', color: null, done: false };
     openTaskModal(placeholder, y, m, true);
   }
 
@@ -1732,7 +1787,14 @@
             ? cell.c.map(cm => (cm.t || '')).join('\n').trim()
             : '';
           const addr = XLSX.utils.encode_cell({r, c: startDay});
-          result[key].push({ title: val, start: startDay, end: endDay, notes: noteText, color: extractCellColor(cell, colorMap, sheetName, addr) });
+          // 셀 텍스트가 "✓ "로 시작하면 완료 상태로 import (title에서 prefix 제거)
+          let parsedTitle = val;
+          let parsedDone = false;
+          if (parsedTitle.startsWith('✓ ')){
+            parsedDone = true;
+            parsedTitle = parsedTitle.slice(2);
+          }
+          result[key].push({ title: parsedTitle, start: startDay, end: endDay, notes: noteText, color: extractCellColor(cell, colorMap, sheetName, addr), done: parsedDone });
         }
       }
       prevMonth = ms.month;
@@ -1928,7 +1990,7 @@
         for (let d = 0; d < MAX_DAYS; d++) row.push('');
         taskRows.push(row);
       }
-      ordered.forEach(t => { taskRows[t._row][t.start] = t.title || ''; });
+      ordered.forEach(t => { taskRows[t._row][t.start] = (t.done ? '✓ ' : '') + (t.title || ''); });
       taskRows.forEach(r => rows.push(r));
 
       merges.push({s:{r:monthStartRowIdx,c:0},e:{r:monthStartRowIdx + rowCount, c:0}});
@@ -2131,11 +2193,26 @@
     notesInput.value = task.notes || '';
     renderColorSwatches('task-modal-swatches', 'task-modal-color-custom', task.color);
     document.getElementById('task-modal-swatches').dataset.selectedColor = task.color || '';
+    // 완료 체크박스 동기화
+    setModalDone(!!task.done);
     if (titleText) titleText.textContent = isNew ? '새 업무 추가' : '업무 상세';
     if (deleteBtn) deleteBtn.hidden = !!isNew;
     updateModalDatesDisplay();
     document.getElementById('task-modal').classList.add('is-open');
     setTimeout(() => titleInput.focus(), 50);
+  }
+  function setModalDone(checked){
+    const row = document.getElementById('modal-done-row');
+    const tog = document.getElementById('modal-done-toggle');
+    if (!row || !tog) return;
+    row.classList.toggle('is-checked', !!checked);
+    tog.classList.toggle('is-checked', !!checked);
+    tog.setAttribute('aria-checked', String(!!checked));
+    tog.dataset.checked = checked ? '1' : '0';
+  }
+  function getModalDone(){
+    const tog = document.getElementById('modal-done-toggle');
+    return tog && tog.dataset.checked === '1';
   }
 
   function closeTaskModal(){
@@ -2206,6 +2283,23 @@
       });
     });
   }
+  // 완료 토글 — 같은 그룹의 모든 조각에 동기화, 저장, 재렌더
+  function toggleTaskDone(task){
+    const next = !task.done;
+    task.done = next;
+    if (task.groupId){
+      Object.keys(monthData).forEach(k => {
+        if (!monthData[k] || !Array.isArray(monthData[k].tasks)) return;
+        monthData[k].tasks.forEach(t => {
+          if (t.groupId === task.groupId) t.done = next;
+        });
+      });
+    }
+    saveAllLocal();
+    renderCalendar();
+    renderThisWeek();
+    if (allSectionOpen) renderAllTasks();
+  }
 
   // 같은 groupId(여러 달 걸친 업무)의 모든 조각을 모든 달에서 제거.
   // groupId 없으면 task.id로 해당 달에서만 제거.
@@ -2227,7 +2321,7 @@
 
   // sIso ~ eIso 범위를 월 경계로 쪼개 monthData[각 달].tasks에 조각으로 분산 저장.
   // 모든 조각은 동일 groupId + fullStart/fullEnd 공유해서 추후 한 번에 수정/삭제 가능.
-  function distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color }){
+  function distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color, done }){
     const sd = parseIsoDate(sIso);
     const ed = parseIsoDate(eIso);
     if (!sd || !ed) return [];
@@ -2251,6 +2345,7 @@
         end: dayEnd,
         notes: notes || '',
         color: color || null,
+        done: !!done,
         fullStart: sIso,
         fullEnd: eIso
       };
@@ -2260,6 +2355,15 @@
     }
     return created;
   }
+
+  // 완료 체크박스 — 행 전체 클릭으로 토글
+  document.getElementById('modal-done-row').addEventListener('click', (e) => {
+    e.preventDefault();
+    setModalDone(!getModalDone());
+  });
+  document.getElementById('modal-done-toggle').addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); setModalDone(!getModalDone()); }
+  });
 
   document.getElementById('modal-close-btn').addEventListener('click', closeTaskModal);
   document.getElementById('modal-save-btn').addEventListener('click', () => {
@@ -2279,11 +2383,12 @@
     const title = document.getElementById('modal-title-input').value;
     const notes = document.getElementById('modal-notes-input').value;
     const color = document.getElementById('task-modal-swatches').dataset.selectedColor || null;
+    const done = getModalDone();
 
     // 기존 그룹/태스크 제거 후 월별 조각 재분산
     const groupId = (!isNew && task.groupId) ? task.groupId : ('g_' + Math.random().toString(36).slice(2, 9));
     if (!isNew) removeTaskOrGroup(task);
-    const pieces = distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color });
+    const pieces = distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color, done });
     focusedTaskId = pieces.length > 0 ? pieces[0].id : null;
 
     if (isNew && pieces.length > 0){
