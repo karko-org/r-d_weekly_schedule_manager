@@ -113,6 +113,10 @@
   .cal-task-bar.is-done:hover{opacity:0.9}
   .tw-item.is-done .tw-title-input{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--muted)}
   .tw-item.is-done{opacity:0.7;background:#f5f3ed}
+  .tw-item.is-done .tw-edit:disabled,
+  .tw-item.is-done .task-remove:disabled{opacity:0.35;cursor:not-allowed}
+  .tw-item.is-done .tw-day-input:disabled{opacity:0.5;cursor:not-allowed;background:transparent}
+  .tw-item.is-done .tw-title-input[readonly]{cursor:default;background:transparent}
   /* 모달 안의 완료 체크박스 */
   .modal-done-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border:1px solid var(--line-soft);border-radius:8px;cursor:pointer;user-select:none;transition:all .12s}
   .modal-done-row:hover{border-color:var(--muted)}
@@ -301,7 +305,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.16</span>
+      <span class="version">v1.0.17</span>
     </div>
   </header>
 
@@ -674,6 +678,14 @@
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
     isDirty = true;
     updateSaveButtonState();
+    scheduleAutoSave();
+  }
+  // 자동 저장 — 변경 후 1.5초 동안 추가 변경 없으면 엑셀 파일에 조용히 저장
+  let autoSaveTimer = null;
+  function scheduleAutoSave(){
+    if (!fileHandle || !FS_API_SUPPORTED) return; // 파일 미연결이면 패스
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => { saveToConnectedFile({ silent: true }); }, 1500);
   }
   function getMonth(y,m){
     const key = monthKey(y,m);
@@ -907,15 +919,15 @@
     return perm === 'granted';
   }
 
-  async function saveToConnectedFile(){
+  async function saveToConnectedFile(opts = {}){
     if (!fileHandle){
-      showToast('먼저 파일을 연결해주세요', 'error');
+      if (!opts.silent) showToast('먼저 파일을 연결해주세요', 'error');
       return;
     }
     try {
       const ok = await ensurePermission(fileHandle, 'readwrite');
       if (!ok){
-        showToast('파일 쓰기 권한이 거부됐습니다', 'error');
+        if (!opts.silent) showToast('파일 쓰기 권한이 거부됐습니다', 'error');
         return;
       }
       const buf = buildExcelBuffer();
@@ -926,12 +938,13 @@
       renderFileStatus();
       const now = new Date();
       const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-      showToast(`저장됨 · ${timeStr}`, 'success');
+      if (opts.silent) showToast(`자동 저장됨 · ${timeStr}`, 'success', 1100);
+      else showToast(`저장됨 · ${timeStr}`, 'success');
     } catch(err){
       console.error(err);
       if (err.name === 'NotAllowedError'){
         showToast('파일 접근 권한이 거부됐습니다. 파일을 다시 연결해주세요', 'error', 4000);
-      } else {
+      } else if (!opts.silent){
         showToast('저장 실패: ' + err.message, 'error', 4000);
       }
     }
@@ -1095,8 +1108,11 @@
     return Array.from(groups.values());
   }
 
-  function renderCalendar(){
+  function renderCalendar(opts = {}){
     const grid = document.getElementById('calendar');
+    // 사용자가 보고 있던 가로 스크롤 위치를 보존 — 단, opts.scrollToThisWeek=true면 무시
+    const wrapEl = document.querySelector('.calendar-wrap');
+    const prevScroll = wrapEl ? wrapEl.scrollLeft : 0;
     const dates = buildCalendarDates();
     const total = dates.length;
     const rangeStart = dates[0].date;
@@ -1250,8 +1266,13 @@
       grid.appendChild(bar);
     });
 
-    // 펼치기 모드면 이번주가 보이도록 자동 스크롤 (이번주 셀이 표시 범위에 없으면 무시)
-    requestAnimationFrame(scrollToThisWeek);
+    // 명시적으로 요청한 경우(월 변경, 펼치기 토글 ON)에만 이번주로 자동 스크롤.
+    // 그 외(task 클릭, 완료 토글, 인라인 편집 등)는 사용자가 보던 위치를 그대로 보존.
+    if (opts.scrollToThisWeek){
+      requestAnimationFrame(scrollToThisWeek);
+    } else if (calendarExpanded && wrapEl){
+      requestAnimationFrame(() => { wrapEl.scrollLeft = prevScroll; });
+    }
   }
 
   function scrollToThisWeek(){
@@ -1342,10 +1363,21 @@
       const startInput = item.querySelector('.tw-day-start');
       const endInput = item.querySelector('.tw-day-end');
       const doneToggle = item.querySelector('.done-toggle');
+      const removeBtn = item.querySelector('.task-remove');
       doneToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleTaskDone(task); });
       doneToggle.addEventListener('keydown', (e) => {
         if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); toggleTaskDone(task); }
       });
+      // 완료 상태이면 제목/날짜 편집 + 수정/삭제 버튼 비활성화
+      if (task.done){
+        titleEl.readOnly = true;
+        if (startInput) startInput.disabled = true;
+        if (endInput) endInput.disabled = true;
+        editBtn.disabled = true;
+        editBtn.title = '완료 해제 후 수정 가능';
+        removeBtn.disabled = true;
+        removeBtn.title = '완료 해제 후 삭제 가능';
+      }
 
       titleEl.addEventListener('input', e => {
         syncTaskTitleInGroup(task, e.target.value);
@@ -1465,10 +1497,19 @@
       const titleEl = item.querySelector('.tw-title-input');
       const editBtn = item.querySelector('.tw-edit');
       const doneToggle = item.querySelector('.done-toggle');
+      const removeBtn = item.querySelector('.task-remove');
       doneToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleTaskDone(task); });
       doneToggle.addEventListener('keydown', (e) => {
         if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); toggleTaskDone(task); }
       });
+      // 완료 상태이면 제목 편집 + 수정/삭제 버튼 비활성화
+      if (task.done){
+        titleEl.readOnly = true;
+        editBtn.disabled = true;
+        editBtn.title = '완료 해제 후 수정 가능';
+        removeBtn.disabled = true;
+        removeBtn.title = '완료 해제 후 삭제 가능';
+      }
 
       titleEl.addEventListener('input', e => {
         syncTaskTitleInGroup(task, e.target.value);
@@ -2882,7 +2923,7 @@
     // 다른 달로 이동하면 주간 섹션(지난주/이번주/다음주)은 현재 달 컨텍스트와
     // 맞지 않으므로 자동으로 접는다
     if (!twCollapsed) setTwCollapsed(true);
-    renderMonthHeader(); renderCalendar();
+    renderMonthHeader(); renderCalendar({ scrollToThisWeek: true });
     if (allSectionOpen) renderAllTasks();
   }
   document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
@@ -2900,7 +2941,7 @@
     calendarExpanded = !calendarExpanded;
     localStorage.setItem(CAL_EXPANDED_KEY, calendarExpanded ? '1' : '0');
     syncCalendarExpandBtn();
-    renderCalendar();
+    renderCalendar({ scrollToThisWeek: true });
   });
   syncCalendarExpandBtn();
 
