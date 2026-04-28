@@ -305,7 +305,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.19</span>
+      <span class="version">v1.0.20</span>
     </div>
   </header>
 
@@ -2137,10 +2137,92 @@
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!merges'] = merges;
-    const cols = [{ wch: 6 }];
-    for (let i = 0; i < totalCols; i++) cols.push({ wch: 3.5 });
+
+    // 컬럼 너비 — A열은 라벨(주순/프로젝트번호), 나머지는 한 주씩
+    const cols = [{ wch: 5 }];
+    for (let i = 0; i < totalCols; i++) cols.push({ wch: 4.2 });
     ws['!cols'] = cols;
 
+    // 행 높이 (pt)
+    const lastRow = 4 + annual.projects.length - 1;
+    const lastCol = totalCols;
+    const rowHeights = [
+      { hpt: 56 }, // R1 제목
+      { hpt: 22 }, // R2 월
+      { hpt: 16 }, // R3 주
+      { hpt: 22 }  // R4 주순
+    ];
+    for (let i = 0; i < annual.projects.length; i++) rowHeights.push({ hpt: 28 });
+    ws['!rows'] = rowHeights;
+
+    // aoa_to_sheet은 빈 문자열을 셀로 만들지 않음. 테두리/스타일 적용을 위해
+    // 모든 좌표에 빈 셀 객체를 보장.
+    for (let r = 0; r <= lastRow; r++){
+      for (let c = 0; c <= lastCol; c++){
+        const addr = XLSX.utils.encode_cell({r, c});
+        if (!ws[addr]) ws[addr] = { v: '', t: 's' };
+      }
+    }
+    ws['!ref'] = XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:lastRow, c:lastCol} });
+
+    // 공통 스타일 헬퍼
+    const thinBorder = {
+      top:    { style: 'thin', color: { rgb: '000000' } },
+      bottom: { style: 'thin', color: { rgb: '000000' } },
+      left:   { style: 'thin', color: { rgb: '000000' } },
+      right:  { style: 'thin', color: { rgb: '000000' } }
+    };
+    const setStyle = (r, c, s) => {
+      const addr = XLSX.utils.encode_cell({r, c});
+      if (!ws[addr]) ws[addr] = { v: '', t: 's' };
+      ws[addr].s = Object.assign({}, ws[addr].s || {}, s);
+    };
+    const FONT = '맑은 고딕';
+
+    // R1: 제목 — 큰 폰트, 가운데, 굵게
+    for (let c = 0; c <= lastCol; c++){
+      setStyle(0, c, {
+        font: { name: FONT, sz: 36, bold: true, color: { rgb: '000000' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: thinBorder,
+        fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' }, bgColor: { rgb: 'FFFFFF' } }
+      });
+    }
+
+    // R2 (월), R3 (주), R4 (주순) — 헤더
+    for (let c = 0; c <= lastCol; c++){
+      // R2 월 — 중간 크기, 굵게
+      setStyle(1, c, {
+        font: { name: FONT, sz: 13, bold: true, color: { rgb: '000000' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: thinBorder
+      });
+      // R3 월 내 주 번호 — 작게, 굵게
+      setStyle(2, c, {
+        font: { name: FONT, sz: 9, bold: true, color: { rgb: '000000' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: thinBorder
+      });
+      // R4 연속 주 순 — 작게, 줄바꿈(헤더 셀의 "주\n순")
+      setStyle(3, c, {
+        font: { name: FONT, sz: 9, bold: true, color: { rgb: '000000' } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: c === 0 },
+        border: thinBorder
+      });
+    }
+
+    // R5~: 프로젝트 행 — 가운데, 굵게(데이터 셀), 테두리
+    for (let r = 4; r <= lastRow; r++){
+      for (let c = 0; c <= lastCol; c++){
+        setStyle(r, c, {
+          font: { name: FONT, sz: 10, bold: c !== 0, color: { rgb: '000000' } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: thinBorder
+        });
+      }
+    }
+
+    // 셀 코멘트
     cellNotesToAdd.forEach(({ r, c, text }) => {
       const addr = XLSX.utils.encode_cell({ r, c });
       if (ws[addr]){
@@ -2148,7 +2230,7 @@
       }
     });
 
-    // 바 배경색 복원 (xlsx-js-style 포맷)
+    // 바 배경색 — 위에서 적용한 일반 스타일 위에 fill만 덮어씀 (테두리/폰트 유지)
     cellStylesToAdd.forEach(({ r, c, color }) => {
       const addr = XLSX.utils.encode_cell({ r, c });
       if (ws[addr]){
