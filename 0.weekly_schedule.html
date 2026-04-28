@@ -305,7 +305,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.17</span>
+      <span class="version">v1.0.18</span>
     </div>
   </header>
 
@@ -910,11 +910,13 @@
     showToast('초기화되었습니다', 'success');
   }
 
-  async function ensurePermission(handle, mode='readwrite'){
+  async function ensurePermission(handle, mode='readwrite', interactive=true){
     if (!handle.queryPermission || !handle.requestPermission) return true;
     const options = { mode };
     let perm = await handle.queryPermission(options);
     if (perm === 'granted') return true;
+    // 자동 저장 등 비대화형 컨텍스트에서는 prompt 띄우지 않고 조용히 실패
+    if (!interactive) return false;
     perm = await handle.requestPermission(options);
     return perm === 'granted';
   }
@@ -925,7 +927,7 @@
       return;
     }
     try {
-      const ok = await ensurePermission(fileHandle, 'readwrite');
+      const ok = await ensurePermission(fileHandle, 'readwrite', !opts.silent);
       if (!ok){
         if (!opts.silent) showToast('파일 쓰기 권한이 거부됐습니다', 'error');
         return;
