@@ -108,6 +108,7 @@
   .cal-task-ghost{position:fixed;pointer-events:none;z-index:1000;margin:0;opacity:0.95;box-shadow:0 14px 32px rgba(60,40,20,0.35), 0 0 0 2px var(--accent);transform:rotate(-1.5deg);transition:none}
   .cal-task-bar.is-drop-above{box-shadow:inset 0 5px 0 var(--accent), 0 0 12px rgba(139,69,19,0.25);transition:box-shadow .12s ease}
   .cal-task-bar.is-drop-below{box-shadow:inset 0 -5px 0 var(--accent), 0 0 12px rgba(139,69,19,0.25);transition:box-shadow .12s ease}
+  .cal-bg.is-drop-target{box-shadow:inset 0 0 0 2px var(--accent);background:var(--accent-soft);transition:box-shadow .12s ease, background .12s ease}
   /* 바 내부 텍스트 — 한 줄 + ellipsis (truncate 책임) */
   .cal-task-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0}
   /* Hover 툴팁 — body 직속 singleton, calendar-wrap clipping 회피 */
@@ -307,7 +308,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.36</span>
+      <span class="version">v1.0.37</span>
     </div>
   </header>
 
@@ -1147,9 +1148,49 @@
   let barDragState = null; // { bar, taskId, monthKey, startX, startY, mode, ghostOffsetX, ghostOffsetY }
   let dragGhostEl = null;
   function clearDropIndicators(){
-    document.querySelectorAll('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below').forEach(el => {
-      el.classList.remove('is-drop-above', 'is-drop-below');
+    document.querySelectorAll('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below, .cal-bg.is-drop-target').forEach(el => {
+      el.classList.remove('is-drop-above', 'is-drop-below', 'is-drop-target');
     });
+  }
+  function isMultiMonthGroup(task){
+    if (!task || !task.groupId) return false;
+    let count = 0;
+    Object.keys(monthData).forEach(k => {
+      if (monthData[k] && Array.isArray(monthData[k].tasks) && monthData[k].tasks.some(t => t.groupId === task.groupId)) count++;
+    });
+    return count > 1;
+  }
+  function shiftTaskDatesInMonth(task, key, deltaDays){
+    if (deltaDays === 0) return false;
+    const parts = key.split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const lastDay = daysInMonth(y, m);
+    const duration = task.end - task.start;
+    let newStart = task.start + deltaDays;
+    let newEnd = task.end + deltaDays;
+    if (newStart < 1){ newStart = 1; newEnd = newStart + duration; }
+    if (newEnd > lastDay){ newEnd = lastDay; newStart = Math.max(1, newEnd - duration); }
+    if (newStart === task.start && newEnd === task.end) return false;
+    task.start = newStart;
+    task.end = newEnd;
+    return true;
+  }
+  // sortIndex를 조정해 task가 targetRow 위치에 오도록 — 같은 row에 있는 다른 바 위로 끼워넣기
+  function placeTaskAtRow(key, draggedId, targetRow){
+    // 현재 렌더된 바들 중 targetRow에 있는 다른 바 찾기 (자기 자신 제외)
+    const bars = document.querySelectorAll('.cal-task-bar[data-task-id]');
+    for (const b of bars){
+      if (b.dataset.monthKey !== key) continue;
+      if (b.dataset.taskId === draggedId) continue;
+      const gridRowVal = parseInt(b.style.gridRow, 10);
+      if (gridRowVal === 3 + targetRow){
+        // 위로 끼워넣기
+        reorderInMonth(key, draggedId, b.dataset.taskId, 'above');
+        return;
+      }
+    }
+    // 해당 row에 자기 자신밖에 없거나 빈 row → sortIndex 변경 안 함 (재렌더 시 알아서 같은 row 유지)
   }
   // Ghost — 잡은 바의 클론이 커서를 따라다님 (Jira 칸반처럼)
   function createDragGhost(srcBar, e){
@@ -1237,14 +1278,12 @@
     const dy = e.clientY - barDragState.startY;
     if (barDragState.mode === null){
       if (Math.abs(dx) < REORDER_THRESHOLD && Math.abs(dy) < REORDER_THRESHOLD) return;
-      // 세로 우세면 reorder, 가로 우세면 cancel (스크롤 모드는 wrap에서 분기됨)
-      barDragState.mode = (Math.abs(dy) > Math.abs(dx)) ? 'reorder' : 'cancel';
-      if (barDragState.mode === 'reorder'){
-        barDragState.bar.classList.add('is-dragging');
-        document.body.style.cursor = 'grabbing';
-        hideCalTip();
-        createDragGhost(barDragState.bar, e);
-      }
+      // 방향 제한 없이 어느 쪽으로든 5px 이상 이동하면 드래그 모드 (가로/세로/대각선 모두)
+      barDragState.mode = 'reorder';
+      barDragState.bar.classList.add('is-dragging');
+      document.body.style.cursor = 'grabbing';
+      hideCalTip();
+      createDragGhost(barDragState.bar, e);
     }
     if (barDragState.mode === 'reorder'){
       e.preventDefault();
@@ -1254,11 +1293,17 @@
       barDragState.bar.style.pointerEvents = 'none';
       const elBelow = document.elementFromPoint(e.clientX, e.clientY);
       barDragState.bar.style.pointerEvents = '';
-      const target = elBelow ? elBelow.closest('.cal-task-bar') : null;
-      if (target && target !== barDragState.bar && target.dataset.monthKey === barDragState.monthKey){
-        const rect = target.getBoundingClientRect();
+      // 우선순위: 다른 task bar (위/아래) > 빈 배경 셀
+      const barTarget = elBelow ? elBelow.closest('.cal-task-bar') : null;
+      if (barTarget && barTarget !== barDragState.bar && barTarget.dataset.monthKey === barDragState.monthKey){
+        const rect = barTarget.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
-        target.classList.add(e.clientY < midY ? 'is-drop-above' : 'is-drop-below');
+        barTarget.classList.add(e.clientY < midY ? 'is-drop-above' : 'is-drop-below');
+      } else {
+        const bgTarget = elBelow ? elBelow.closest('.cal-bg') : null;
+        if (bgTarget && bgTarget.dataset.monthKey === barDragState.monthKey){
+          bgTarget.classList.add('is-drop-target');
+        }
       }
     }
   });
@@ -1272,18 +1317,44 @@
       return;
     }
     ended.bar.classList.remove('is-dragging');
-    let targetId = null, position = null;
-    const indicator = document.querySelector('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below');
-    if (indicator){
-      targetId = indicator.dataset.taskId;
-      position = indicator.classList.contains('is-drop-above') ? 'above' : 'below';
-    }
-    clearDropIndicators();
+    const barInd = document.querySelector('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below');
+    const bgInd = document.querySelector('.cal-bg.is-drop-target');
     ended.bar._suppressNextClick = true; // 드래그였으니 click 이벤트 무시
-    if (targetId){
+
+    let didChange = false;
+    const sourceTask = (monthData[ended.monthKey] && monthData[ended.monthKey].tasks)
+      ? monthData[ended.monthKey].tasks.find(t => t.id === ended.taskId)
+      : null;
+
+    if (barInd && sourceTask){
+      const targetId = barInd.dataset.taskId;
+      const position = barInd.classList.contains('is-drop-above') ? 'above' : 'below';
+      const targetTask = monthData[ended.monthKey].tasks.find(t => t.id === targetId);
+      // 다른 날짜 바에 드롭 → 날짜도 변경 (단, 멀티월 그룹은 스킵)
+      if (targetTask && targetTask.start !== sourceTask.start && !isMultiMonthGroup(sourceTask)){
+        if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, targetTask.start - sourceTask.start)) didChange = true;
+      }
+      reorderInMonth(ended.monthKey, ended.taskId, targetId, position);
+      didChange = true;
+    } else if (bgInd && sourceTask){
+      const newDay = parseInt(bgInd.dataset.day, 10);
+      const targetRow = parseInt(bgInd.dataset.row, 10);
+      // 날짜 변경 (멀티월 그룹은 스킵)
+      if (Number.isFinite(newDay) && !isMultiMonthGroup(sourceTask)){
+        if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, newDay - sourceTask.start)) didChange = true;
+      }
+      // row 위치 변경 (sortIndex 조정)
+      if (Number.isFinite(targetRow)){
+        placeTaskAtRow(ended.monthKey, ended.taskId, targetRow);
+        didChange = true;
+      }
+    }
+
+    clearDropIndicators();
+
+    if (didChange){
       const snapshot = snapshotBarPositions();
       destroyDragGhost();
-      reorderInMonth(ended.monthKey, ended.taskId, targetId, position);
       saveAllLocal();
       renderCalendar();
       animateBarsFromSnapshot(snapshot);
@@ -1407,6 +1478,11 @@
         if (!meta.isCurrentMonth) bg.classList.add('is-other-month');
         bg.style.gridRow = String(3 + r);
         bg.style.gridColumn = String(i + 2);
+        bg.dataset.row = r;
+        bg.dataset.year = meta.y;
+        bg.dataset.month = meta.m;
+        bg.dataset.day = meta.d;
+        bg.dataset.monthKey = monthKey(meta.y, meta.m);
         grid.appendChild(bg);
       });
     }
