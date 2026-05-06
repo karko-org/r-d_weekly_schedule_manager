@@ -324,7 +324,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.39</span>
+      <span class="version">v1.0.40</span>
     </div>
   </header>
 
@@ -1168,6 +1168,24 @@
       el.classList.remove('is-drop-above', 'is-drop-below', 'is-drop-target');
     });
   }
+  function getCalendarDayWidth(){
+    const bg = document.querySelector('.cal-bg');
+    if (bg) return bg.getBoundingClientRect().width;
+    return 30;
+  }
+  // 두 task의 sortIndex만 교환 — 다른 task는 영향 없음
+  function swapSortIndex(key, aId, bId){
+    if (!monthData[key]) return false;
+    const arr = monthData[key].tasks;
+    arr.forEach((t, i) => { if (typeof t.sortIndex !== 'number') t.sortIndex = i; });
+    const a = arr.find(t => t.id === aId);
+    const b = arr.find(t => t.id === bId);
+    if (!a || !b || a === b || a.sortIndex === b.sortIndex) return false;
+    const tmp = a.sortIndex;
+    a.sortIndex = b.sortIndex;
+    b.sortIndex = tmp;
+    return true;
+  }
   function isMultiMonthGroup(task){
     if (!task || !task.groupId) return false;
     let count = 0;
@@ -1200,19 +1218,17 @@
       const currentRow = parseInt(draggedBar.style.gridRow, 10) - 3;
       if (currentRow === targetRow) return false;
     }
-    // 현재 렌더된 바들 중 targetRow에 있는 다른 바 찾기 (자기 자신 제외)
+    // 현재 렌더된 바들 중 targetRow에 있는 다른 바 찾기 (자기 자신 제외) — SWAP
     const bars = document.querySelectorAll('.cal-task-bar[data-task-id]');
     for (const b of bars){
       if (b.dataset.monthKey !== key) continue;
       if (b.dataset.taskId === draggedId) continue;
       const gridRowVal = parseInt(b.style.gridRow, 10);
       if (gridRowVal === 3 + targetRow){
-        // 위로 끼워넣기
-        reorderInMonth(key, draggedId, b.dataset.taskId, 'above');
-        return true;
+        // 둘만 자리 교환 (다른 task는 영향 없음)
+        return swapSortIndex(key, draggedId, b.dataset.taskId);
       }
     }
-    // 해당 row에 자기 자신밖에 없거나 빈 row → sortIndex 변경 안 함
     return false;
   }
   // Ghost — 잡은 바의 클론이 커서를 spring처럼 따라다님 (lerp 기반 rAF 루프)
@@ -1360,7 +1376,7 @@
       }
     }
   });
-  document.addEventListener('mouseup', () => {
+  document.addEventListener('mouseup', (e) => {
     if (!barDragState) return;
     const ended = barDragState;
     barDragState = null;
@@ -1379,26 +1395,25 @@
       ? monthData[ended.monthKey].tasks.find(t => t.id === ended.taskId)
       : null;
 
-    if (barInd && sourceTask){
-      const targetId = barInd.dataset.taskId;
-      const position = barInd.classList.contains('is-drop-above') ? 'above' : 'below';
-      const targetTask = monthData[ended.monthKey].tasks.find(t => t.id === targetId);
-      // 다른 날짜 바에 드롭 → 날짜도 변경 (단, 멀티월 그룹은 스킵)
-      if (targetTask && targetTask.start !== sourceTask.start && !isMultiMonthGroup(sourceTask)){
-        if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, targetTask.start - sourceTask.start)) didChange = true;
+    if (sourceTask && (barInd || bgInd)){
+      // 날짜 시프트: cursor가 실제로 가로로 움직인 픽셀을 dayWidth로 나눠 day 단위로 round.
+      // 세로만 움직이면 dayDelta=0 → 가로로 밀리지 않음.
+      if (!isMultiMonthGroup(sourceTask)){
+        const dayWidth = getCalendarDayWidth();
+        const cursorDxPx = e.clientX - ended.startX;
+        const dayDelta = Math.round(cursorDxPx / dayWidth);
+        if (dayDelta !== 0){
+          if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, dayDelta)) didChange = true;
+        }
       }
-      reorderInMonth(ended.monthKey, ended.taskId, targetId, position);
-      didChange = true;
-    } else if (bgInd && sourceTask){
-      const newDay = parseInt(bgInd.dataset.day, 10);
-      const targetRow = parseInt(bgInd.dataset.row, 10);
-      // 날짜 변경 (멀티월 그룹은 스킵)
-      if (Number.isFinite(newDay) && !isMultiMonthGroup(sourceTask)){
-        if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, newDay - sourceTask.start)) didChange = true;
-      }
-      // row 위치 변경 (sortIndex 조정) — 이미 같은 row면 no-op
-      if (Number.isFinite(targetRow)){
-        if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow)) didChange = true;
+      // 정렬 변경: SWAP (둘만 자리 교환, 다른 task는 영향 없음)
+      if (barInd){
+        if (swapSortIndex(ended.monthKey, ended.taskId, barInd.dataset.taskId)) didChange = true;
+      } else if (bgInd){
+        const targetRow = parseInt(bgInd.dataset.row, 10);
+        if (Number.isFinite(targetRow)){
+          if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow)) didChange = true;
+        }
       }
     }
 
