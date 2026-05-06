@@ -171,19 +171,11 @@
   .task-remove{color:var(--muted);font-size:18px;line-height:1;padding:4px;border-radius:4px;transition:all .15s}
   .task-remove:hover{color:var(--today);background:var(--bg)}
 
-  .all-section{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-bottom:22px;transition:padding .15s}
-  .all-section.is-collapsed{padding-bottom:14px}
-  .all-section.is-collapsed .tw-header{margin-bottom:0;padding-bottom:0;border-bottom:none}
-  .all-section.is-collapsed .all-content{display:none}
-  .all-section:not(.is-collapsed) .tw-collapse-btn .chevron{transform:rotate(90deg)}
   .sort-select{font-family:inherit;font-size:12px;padding:5px 28px 5px 10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink-2);cursor:pointer;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);background-position:calc(100% - 14px) 50%, calc(100% - 10px) 50%;background-size:4px 4px, 4px 4px;background-repeat:no-repeat}
   .sort-select:hover{border-color:var(--ink-2);color:var(--ink)}
   .sort-select:focus{outline:none;border-color:var(--accent)}
-  .all-section.is-collapsed .sort-select,
   .tw-section.is-collapsed .sort-select{display:none}
   .chevron{display:inline-block;transition:transform 0.2s;font-size:10px;color:var(--muted);width:12px}
-  .all-content{padding-top:4px}
-  .task-list{display:flex;flex-direction:column;gap:6px}
   .add-task-btn{margin-top:10px;padding:11px;font-size:13px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;transition:all .15s;width:100%}
   .add-task-btn:hover{color:var(--accent);border-color:var(--accent);border-style:solid;background:var(--accent-soft)}
 
@@ -310,7 +302,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.31</span>
+      <span class="version">v1.0.32</span>
     </div>
   </header>
 
@@ -374,31 +366,6 @@
     <div class="tw-list" id="tw-list"></div>
   </section>
 
-  <section class="all-section is-collapsed" id="all-section">
-    <div class="tw-header">
-      <div class="tw-title-group">
-        <span class="tw-badge" id="all-section-badge"></span>
-      </div>
-      <div class="tw-header-right">
-        <select class="sort-select" id="all-sort-field" aria-label="정렬 기준">
-          <option value="date">날짜순</option>
-          <option value="title">제목순</option>
-        </select>
-        <select class="sort-select" id="all-sort-dir" aria-label="정렬 방향">
-          <option value="asc">오름차순</option>
-          <option value="desc">내림차순</option>
-        </select>
-        <span class="task-count" id="all-count"></span>
-        <button class="tw-collapse-btn" id="all-collapse-btn" aria-expanded="false" aria-label="접기/펼치기">
-          <span class="chevron">▶</span>
-          <span id="all-collapse-label">펼치기</span>
-        </button>
-      </div>
-    </div>
-    <div class="all-content" id="all-content">
-      <div class="task-list" id="task-list"></div>
-    </div>
-  </section>
   </section><!-- /#monthly-panel -->
 
   <section id="annual-panel" hidden>
@@ -532,8 +499,6 @@
   const ANNUAL_STORAGE_KEY = 'kar_annual_schedule_v1';
   const VIEW_KEY = 'kar_current_view_v1'; // 'monthly' | 'annual'
   const ANNUAL_YEAR_KEY = 'kar_current_annual_year_v1';
-  const ALL_SORT_FIELD_KEY = 'kar_all_sort_field_v1'; // 'date' | 'title'
-  const ALL_SORT_DIR_KEY = 'kar_all_sort_dir_v1';     // 'asc' | 'desc'
   const TW_SORT_FIELD_KEY = 'kar_tw_sort_field_v1';
   const TW_SORT_DIR_KEY = 'kar_tw_sort_dir_v1';
   const CAL_EXPANDED_KEY = 'kar_calendar_expanded_v1';
@@ -577,7 +542,6 @@
   const editingTwIds = new Set();
   let monthData = loadAll();
   let focusedTaskId = null;
-  let allSectionOpen = false;
   function loadSortField(key){
     try { const v = localStorage.getItem(key); return (v === 'title') ? 'title' : 'date'; }
     catch(e){ return 'date'; }
@@ -586,8 +550,6 @@
     try { const v = localStorage.getItem(key); return (v === 'desc') ? 'desc' : 'asc'; }
     catch(e){ return 'asc'; }
   }
-  let allSortField = loadSortField(ALL_SORT_FIELD_KEY);
-  let allSortDir = loadSortDir(ALL_SORT_DIR_KEY);
   let twSortField = loadSortField(TW_SORT_FIELD_KEY);
   let twSortDir = loadSortDir(TW_SORT_DIR_KEY);
 
@@ -854,7 +816,6 @@
       renderMonthHeader();
       renderCalendar();
       renderThisWeek();
-      if (allSectionOpen) renderAllTasks();
       if (currentView === 'annual') renderAnnual();
 
       if (totalCount > 0){
@@ -915,7 +876,6 @@
     renderMonthHeader();
     renderCalendar();
     renderThisWeek();
-    if (allSectionOpen) renderAllTasks();
     if (currentView === 'annual') renderAnnual();
     showToast('초기화되었습니다', 'success');
   }
@@ -1033,8 +993,8 @@
         <button class="disconnect-btn" id="disconnect-btn" title="연결 해제 및 초기화">✕</button>
       `;
       document.getElementById('disconnect-btn').addEventListener('click', (e) => { e.stopPropagation(); disconnectFile(); });
-      saveBtn.disabled = !isDirty;
-      saveBtn.textContent = isDirty ? '저장' : '저장됨';
+      saveBtn.disabled = false;
+      saveBtn.textContent = '저장';
     }
   }
 
@@ -1045,8 +1005,8 @@
       saveBtn.disabled = true;
       return;
     }
-    saveBtn.disabled = !isDirty;
-    saveBtn.textContent = isDirty ? '저장' : '저장됨';
+    saveBtn.disabled = false;
+    saveBtn.textContent = '저장';
     // Also update status label
     const statusText = document.querySelector('#file-status .file-status-text');
     if (statusText) statusText.textContent = isDirty ? '변경됨' : '동기화됨';
@@ -1060,7 +1020,6 @@
     document.getElementById('month-label').textContent = label;
     const {start, end} = getTwRange();
     document.getElementById('tw-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
-    document.getElementById('all-section-badge').textContent = `${currentYear}년 ${currentMonth+1}월 전체 업무`;
   }
 
   // 캘린더에 표시할 날짜 배열 생성 — 펼치기 모드면 전후 7일씩 추가
@@ -1414,10 +1373,6 @@
       titleEl.addEventListener('input', e => {
         syncTaskTitleInGroup(task, e.target.value);
         saveAllLocal(); renderCalendar();
-        if (allSectionOpen && y === currentYear && m === currentMonth){
-          const twin = document.querySelector(`.all-section .tw-item[data-id="${task.id}"] .tw-title-input`);
-          if (twin && document.activeElement !== twin) twin.value = task.title;
-        }
       });
       // Enter → input 포커스 해제만 (값은 input 이벤트로 이미 저장됨)
       titleEl.addEventListener('keydown', e => {
@@ -1470,7 +1425,6 @@
           : `${nsd.getMonth()+1}/${nsd.getDate()}(${WEEKDAYS_KR[nsd.getDay()]}) - ${ned.getMonth()+1}/${ned.getDate()}(${WEEKDAYS_KR[ned.getDay()]})`;
         const datesView = item.querySelector('.tw-dates');
         if (datesView) datesView.textContent = dStr;
-        if (allSectionOpen && y === currentYear && m === currentMonth) renderAllTasks();
       };
       startInput.addEventListener('change', onDayChange);
       endInput.addEventListener('change', onDayChange);
@@ -1480,110 +1434,14 @@
         editingTwIds.delete(task.id);
         if (focusedTaskId === task.id) focusedTaskId = null;
         saveAllLocal();
-        renderCalendar(); renderThisWeek(); renderAllTasks();
+        renderCalendar(); renderThisWeek();
       });
       list.appendChild(item);
     });
-  }
-
-  function renderAllTasks(){
-    const list = document.getElementById('task-list');
-    const data = getMonth(currentYear, currentMonth);
-    list.innerHTML = '';
-    const days = daysInMonth(currentYear, currentMonth);
-
-    document.getElementById('all-count').textContent = data.tasks.length ? `${data.tasks.length}건` : '';
-
-    if (data.tasks.length === 0){
-      const empty = document.createElement('div');
-      empty.className = 'tw-empty';
-      empty.textContent = '— 이번 달 등록된 업무 없음 —';
-      list.appendChild(empty);
-      return;
-    }
-
-    const y = currentYear;
-    const m = currentMonth;
-    const sorted = sortTasks(data.tasks, allSortField, allSortDir);
-
-    sorted.forEach(task => {
-      const item = document.createElement('div');
-      item.className = 'tw-item';
-      if (task.done) item.classList.add('is-done');
-      item.dataset.id = task.id;
-      const startD = new Date(y, m, task.start);
-      const endD = new Date(y, m, task.end);
-      const sameDay = task.start === task.end;
-      const dateStr = sameDay
-        ? `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]})`
-        : `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]}) - ${endD.getMonth()+1}/${endD.getDate()}(${WEEKDAYS_KR[endD.getDay()]})`;
-      item.innerHTML = `
-        <span class="done-toggle ${task.done ? 'is-checked' : ''}" role="checkbox" aria-checked="${!!task.done}" tabindex="0" title="${task.done ? '완료 해제' : '완료로 표시'}"></span>
-        <input class="tw-title-input" placeholder="업무 내용" value="${escapeAttr(task.title)}">
-        <div class="tw-dates-cell">
-          <div class="tw-dates">${dateStr}</div>
-        </div>
-        <button class="tw-edit" aria-label="수정" title="수정">✎</button>
-        <button class="task-remove" aria-label="삭제">×</button>
-      `;
-      const titleEl = item.querySelector('.tw-title-input');
-      const editBtn = item.querySelector('.tw-edit');
-      const doneToggle = item.querySelector('.done-toggle');
-      const removeBtn = item.querySelector('.task-remove');
-      doneToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleTaskDone(task); });
-      doneToggle.addEventListener('keydown', (e) => {
-        if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); toggleTaskDone(task); }
-      });
-      // 완료 상태이면 제목 편집 + 수정/삭제 버튼 비활성화
-      if (task.done){
-        titleEl.readOnly = true;
-        editBtn.disabled = true;
-        editBtn.title = '완료 해제 후 수정 가능';
-        removeBtn.disabled = true;
-        removeBtn.title = '완료 해제 후 삭제 가능';
-      }
-
-      titleEl.addEventListener('input', e => {
-        syncTaskTitleInGroup(task, e.target.value);
-        saveAllLocal();
-        renderCalendar();
-        // 같은 업무가 이번주/다음주 섹션에도 있으면 입력 동기화 (포커스 안 뺏김)
-        const {start: twStart, end: twEnd} = getTwRange();
-        if (taskOverlapsRange(task, y, m, twStart, twEnd)){
-          const twin = document.querySelector(`.tw-section .tw-item[data-id="${task.id}"] .tw-title-input`);
-          if (twin && document.activeElement !== twin) twin.value = task.title;
-        }
-      });
-
-      editBtn.addEventListener('click', () => {
-        focusedTaskId = task.id;
-        openTaskModal(task, y, m);
-      });
-
-      item.querySelector('.task-remove').addEventListener('click', () => {
-        removeTaskOrGroup(task); // 여러 달 조각 전체 제거
-        editingTwIds.delete(task.id);
-        if (focusedTaskId === task.id) focusedTaskId = null;
-        saveAllLocal();
-        renderCalendar(); renderThisWeek(); renderAllTasks();
-      });
-      list.appendChild(item);
-    });
-  }
-
-  function toggleAllSection(open){
-    allSectionOpen = typeof open === 'boolean' ? open : !allSectionOpen;
-    const section = document.getElementById('all-section');
-    section.classList.toggle('is-collapsed', !allSectionOpen);
-    const btn = document.getElementById('all-collapse-btn');
-    btn.setAttribute('aria-expanded', String(allSectionOpen));
-    const label = document.getElementById('all-collapse-label');
-    if (label) label.textContent = allSectionOpen ? '접기' : '펼치기';
-    if (allSectionOpen) renderAllTasks();
   }
 
   // 단일 "업무 일지 추가" 버튼 — 기본 날짜는 현재 보고 있는 달 맥락으로 설정,
-  // 저장 시 날짜가 이번주/다음주 범위에 들어가면 tw 섹션, 아니면 all 섹션 자동 펼침.
+  // 저장 시 날짜가 이번주/다음주 범위에 들어가면 tw 섹션 자동 펼침.
   function addTaskLog(){
     const y = currentYear;
     const m = currentMonth;
@@ -2468,7 +2326,6 @@
     saveAllLocal();
     renderCalendar();
     renderThisWeek();
-    if (allSectionOpen) renderAllTasks();
   }
   // 날짜 변경 시 DOM 정합성만 유지 (객체 수정 없음).
   // ISO 문자열(YYYY-MM-DD) 기준 — 종료 < 시작이면 종료를 시작과 같게 맞춤.
@@ -2520,7 +2377,6 @@
     saveAllLocal();
     renderCalendar();
     renderThisWeek();
-    if (allSectionOpen) renderAllTasks();
   }
 
   // 같은 groupId(여러 달 걸친 업무)의 모든 조각을 모든 달에서 제거.
@@ -2626,8 +2482,6 @@
       });
       if (inTw){
         if (twCollapsed) setTwCollapsed(false);
-      } else {
-        if (!allSectionOpen) toggleAllSection(true);
       }
     }
 
@@ -2651,7 +2505,6 @@
     closeTaskModal();
     renderCalendar();
     renderThisWeek();
-    if (allSectionOpen) renderAllTasks();
   });
   // (바깥 클릭으로 닫기는 실수 방지 위해 제거 — X 또는 저장 버튼으로만 닫힘)
 
@@ -3105,12 +2958,10 @@
     // 맞지 않으므로 자동으로 접는다
     if (!twCollapsed) setTwCollapsed(true);
     renderMonthHeader(); renderCalendar({ scrollToThisWeek: true });
-    if (allSectionOpen) renderAllTasks();
   }
   document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('add-log-btn').addEventListener('click', addTaskLog);
-  document.getElementById('all-collapse-btn').addEventListener('click', () => toggleAllSection());
 
   function syncCalendarExpandBtn(){
     const btn = document.getElementById('cal-expand-btn');
@@ -3187,13 +3038,6 @@
       });
     }
   }
-  bindSortSelects({
-    fieldId: 'all-sort-field', dirId: 'all-sort-dir',
-    fieldKey: ALL_SORT_FIELD_KEY, dirKey: ALL_SORT_DIR_KEY,
-    getField: () => allSortField, getDir: () => allSortDir,
-    setField: v => { allSortField = v; }, setDir: v => { allSortDir = v; },
-    onChange: () => renderAllTasks()
-  });
   bindSortSelects({
     fieldId: 'tw-sort-field', dirId: 'tw-sort-dir',
     fieldKey: TW_SORT_FIELD_KEY, dirKey: TW_SORT_DIR_KEY,
