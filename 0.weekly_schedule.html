@@ -105,9 +105,9 @@
   .cal-task-bar.has-custom-color.is-focused{box-shadow:0 0 0 2px var(--today)}
   /* 바 내부 텍스트 — 한 줄 + ellipsis (truncate 책임) */
   .cal-task-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0}
-  /* Hover 시 풀 콘텐츠 툴팁 — 다크 배경, 위쪽 표시 */
-  .cal-task-bar::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:500;font-family:inherit;white-space:pre-wrap;max-width:280px;width:max-content;word-break:keep-all;box-shadow:0 6px 16px rgba(0,0,0,0.18);z-index:100;pointer-events:none;line-height:1.45;opacity:0;visibility:hidden;transition:opacity .12s, visibility 0s .12s}
-  .cal-task-bar:hover::after{opacity:1;visibility:visible;transition:opacity .12s, visibility 0s}
+  /* Hover 툴팁 — body 직속 singleton, calendar-wrap clipping 회피 */
+  .cal-tip{position:fixed;top:0;left:0;background:var(--ink);color:#fff;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:500;font-family:inherit;white-space:pre-wrap;max-width:360px;word-break:keep-all;box-shadow:0 8px 24px rgba(0,0,0,0.22);z-index:1000;pointer-events:none;line-height:1.5;opacity:0;visibility:hidden;transition:opacity .12s, visibility 0s .12s}
+  .cal-tip.is-visible{opacity:1;visibility:visible;transition:opacity .12s, visibility 0s}
   /* 완료 체크박스 (task bar 좌측 + 리스트 좌측 공용) */
   .done-toggle{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1.5px solid var(--muted);border-radius:4px;background:transparent;color:transparent;font-size:11px;font-weight:900;line-height:1;flex:0 0 16px;transition:all .12s;cursor:pointer}
   .done-toggle:hover{border-color:var(--ink);background:rgba(255,255,255,0.5)}
@@ -310,7 +310,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.27</span>
+      <span class="version">v1.0.28</span>
     </div>
   </header>
 
@@ -1120,6 +1120,38 @@
     return Array.from(groups.values());
   }
 
+  // 캘린더 바 hover 툴팁 — body 직속 singleton (calendar-wrap의 overflow clipping을 우회)
+  const calTipEl = document.createElement('div');
+  calTipEl.className = 'cal-tip';
+  document.body.appendChild(calTipEl);
+  function showCalTip(bar){
+    const tip = bar.dataset.tip || '';
+    if (!tip) return;
+    calTipEl.textContent = tip;
+    calTipEl.classList.add('is-visible');
+    positionCalTip(bar);
+  }
+  function hideCalTip(){
+    calTipEl.classList.remove('is-visible');
+  }
+  function positionCalTip(bar){
+    const rect = bar.getBoundingClientRect();
+    const tipRect = calTipEl.getBoundingClientRect();
+    const margin = 8;
+    let x = rect.left + rect.width / 2 - tipRect.width / 2;
+    if (x < margin) x = margin;
+    if (x + tipRect.width > window.innerWidth - margin) x = window.innerWidth - tipRect.width - margin;
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    let y;
+    if (tipRect.height + margin <= spaceAbove) y = rect.top - tipRect.height - margin;
+    else if (tipRect.height + margin <= spaceBelow) y = rect.bottom + margin;
+    else if (spaceAbove >= spaceBelow) y = margin;
+    else y = window.innerHeight - tipRect.height - margin;
+    calTipEl.style.left = x + 'px';
+    calTipEl.style.top = y + 'px';
+  }
+
   function renderCalendar(opts = {}){
     const grid = document.getElementById('calendar');
     // 사용자가 보고 있던 가로 스크롤 위치를 보존 — 단, opts.scrollToThisWeek=true면 무시
@@ -1261,6 +1293,8 @@
         renderCalendar();
         openTaskModal(t, t._origY, t._origM);
       });
+      bar.addEventListener('mouseenter', () => showCalTip(bar));
+      bar.addEventListener('mouseleave', hideCalTip);
       grid.appendChild(bar);
     });
 
