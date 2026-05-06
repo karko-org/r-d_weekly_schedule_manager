@@ -106,7 +106,7 @@
   /* 바 내부 텍스트 — 한 줄 + ellipsis (truncate 책임) */
   .cal-task-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0}
   /* Hover 툴팁 — body 직속 singleton, calendar-wrap clipping 회피 */
-  .cal-tip{position:fixed;top:0;left:0;background:var(--ink);color:#fff;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:500;font-family:inherit;white-space:pre-wrap;max-width:360px;word-break:keep-all;box-shadow:0 8px 24px rgba(0,0,0,0.22);z-index:1000;pointer-events:none;line-height:1.5;opacity:0;visibility:hidden;transition:opacity .12s, visibility 0s .12s}
+  .cal-tip{position:fixed;top:0;left:0;background:var(--surface);color:var(--ink);padding:10px 14px;border-radius:8px;border:1px solid var(--line);font-size:12px;font-weight:500;font-family:inherit;white-space:pre-wrap;max-width:360px;word-break:keep-all;box-shadow:0 8px 24px rgba(60,40,20,0.12);z-index:1000;pointer-events:none;line-height:1.5;opacity:0;visibility:hidden;transition:opacity .12s, visibility 0s .12s}
   .cal-tip.is-visible{opacity:1;visibility:visible;transition:opacity .12s, visibility 0s}
   /* 완료 체크박스 (task bar 좌측 + 리스트 좌측 공용) */
   .done-toggle{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1.5px solid var(--muted);border-radius:4px;background:transparent;color:transparent;font-size:11px;font-weight:900;line-height:1;flex:0 0 16px;transition:all .12s;cursor:pointer}
@@ -310,7 +310,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.28</span>
+      <span class="version">v1.0.29</span>
     </div>
   </header>
 
