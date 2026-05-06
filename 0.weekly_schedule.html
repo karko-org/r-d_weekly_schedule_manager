@@ -103,6 +103,10 @@
   /* 원본 엑셀 색상이 있는 월간 바는 호버 시에도 색상 유지 */
   .cal-task-bar.has-custom-color:hover{filter:brightness(0.92);box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:2}
   .cal-task-bar.has-custom-color.is-focused{box-shadow:0 0 0 2px var(--today)}
+  /* 드래그앤드랍 시각 피드백 */
+  .cal-task-bar.is-dragging{opacity:0.5;cursor:grabbing;z-index:5}
+  .cal-task-bar.is-drop-above{box-shadow:inset 0 3px 0 var(--accent)}
+  .cal-task-bar.is-drop-below{box-shadow:inset 0 -3px 0 var(--accent)}
   /* 바 내부 텍스트 — 한 줄 + ellipsis (truncate 책임) */
   .cal-task-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0}
   /* Hover 툴팁 — body 직속 singleton, calendar-wrap clipping 회피 */
@@ -302,7 +306,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.32</span>
+      <span class="version">v1.0.33</span>
     </div>
   </header>
 
@@ -638,8 +642,28 @@
   }
 
   function loadAll(){
-    try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-    catch(e){ return {}; }
+    try{
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      ensureSortIndices(data);
+      return data;
+    } catch(e){ return {}; }
+  }
+  // 마이그레이션 — sortIndex 누락된 task에 배열 인덱스 기반으로 부여
+  function ensureSortIndices(data){
+    if (!data) return;
+    Object.keys(data).forEach(key => {
+      const tasks = (data[key] && data[key].tasks) || [];
+      tasks.forEach((t, i) => {
+        if (typeof t.sortIndex !== 'number') t.sortIndex = i;
+      });
+    });
+  }
+  function nextSortIndexFor(key){
+    const arr = (monthData[key] && monthData[key].tasks) || [];
+    if (!arr.length) return 0;
+    let max = -Infinity;
+    arr.forEach(t => { if (typeof t.sortIndex === 'number' && t.sortIndex > max) max = t.sortIndex; });
+    return (max === -Infinity ? 0 : max + 1);
   }
   function saveAllLocal(){
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
@@ -668,7 +692,11 @@
   }
 
   function assignRows(tasks){
-    const sorted = [...tasks].sort((a,b) => a.start - b.start || a.end - b.end);
+    const sorted = [...tasks].sort((a,b) =>
+      a.start - b.start ||
+      a.end - b.end ||
+      ((a.sortIndex ?? 0) - (b.sortIndex ?? 0))
+    );
     const rows = [];
     sorted.forEach(t => {
       let placed = false;
@@ -774,6 +802,8 @@
             monthData[key].tasks.push({ id: uid(), title: t.title, start: t.start, end: t.end, notes: t.notes || '', color: t.color || null, done: !!t.done });
           });
         });
+        // 파싱 순서(= 엑셀 _row 순서) 그대로 sortIndex 부여
+        ensureSortIndices(monthData);
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
         // 월간이 있으면: 오늘 달에 task가 있으면 오늘 달로, 없으면 가장 이른 월로 이동
         const importedMonths = Object.keys(importResult.monthly.parsed).filter(k => importResult.monthly.parsed[k].length > 0).sort();
@@ -1111,6 +1141,89 @@
     calTipEl.style.top = y + 'px';
   }
 
+  // ---------- 캘린더 바 드래그앤드랍 재정렬 ----------
+  const REORDER_THRESHOLD = 5;
+  let barDragState = null; // { bar, taskId, monthKey, startX, startY, mode }
+  function clearDropIndicators(){
+    document.querySelectorAll('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below').forEach(el => {
+      el.classList.remove('is-drop-above', 'is-drop-below');
+    });
+  }
+  function reorderInMonth(key, draggedId, targetId, position){
+    if (!monthData[key]) return;
+    const arr = monthData[key].tasks;
+    arr.forEach((t, i) => { if (typeof t.sortIndex !== 'number') t.sortIndex = i; });
+    const sorted = [...arr].sort((a,b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0));
+    const dragged = sorted.find(t => t.id === draggedId);
+    if (!dragged) return;
+    const without = sorted.filter(t => t.id !== draggedId);
+    if (!targetId) return; // 빈 영역 drop은 no-op
+    const targetIdx = without.findIndex(t => t.id === targetId);
+    if (targetIdx === -1) return;
+    const insertAt = position === 'above' ? targetIdx : targetIdx + 1;
+    without.splice(insertAt, 0, dragged);
+    without.forEach((t, i) => { t.sortIndex = i; });
+  }
+  function startBarDrag(e, bar){
+    if (e.button !== 0) return;
+    barDragState = {
+      bar,
+      taskId: bar.dataset.taskId,
+      monthKey: bar.dataset.monthKey,
+      startX: e.clientX,
+      startY: e.clientY,
+      mode: null
+    };
+  }
+  document.addEventListener('mousemove', (e) => {
+    if (!barDragState) return;
+    const dx = e.clientX - barDragState.startX;
+    const dy = e.clientY - barDragState.startY;
+    if (barDragState.mode === null){
+      if (Math.abs(dx) < REORDER_THRESHOLD && Math.abs(dy) < REORDER_THRESHOLD) return;
+      // 세로 우세면 reorder, 가로 우세면 cancel (스크롤 모드는 wrap에서 분기됨)
+      barDragState.mode = (Math.abs(dy) > Math.abs(dx)) ? 'reorder' : 'cancel';
+      if (barDragState.mode === 'reorder'){
+        barDragState.bar.classList.add('is-dragging');
+        hideCalTip();
+      }
+    }
+    if (barDragState.mode === 'reorder'){
+      e.preventDefault();
+      clearDropIndicators();
+      // source bar를 일시적으로 무시해 elementFromPoint이 그 아래 요소를 잡도록
+      barDragState.bar.style.pointerEvents = 'none';
+      const elBelow = document.elementFromPoint(e.clientX, e.clientY);
+      barDragState.bar.style.pointerEvents = '';
+      const target = elBelow ? elBelow.closest('.cal-task-bar') : null;
+      if (target && target !== barDragState.bar && target.dataset.monthKey === barDragState.monthKey){
+        const rect = target.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        target.classList.add(e.clientY < midY ? 'is-drop-above' : 'is-drop-below');
+      }
+    }
+  });
+  document.addEventListener('mouseup', () => {
+    if (!barDragState) return;
+    const ended = barDragState;
+    barDragState = null;
+    if (ended.mode !== 'reorder') return;
+    ended.bar.classList.remove('is-dragging');
+    let targetId = null, position = null;
+    const indicator = document.querySelector('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below');
+    if (indicator){
+      targetId = indicator.dataset.taskId;
+      position = indicator.classList.contains('is-drop-above') ? 'above' : 'below';
+    }
+    clearDropIndicators();
+    ended.bar._suppressNextClick = true; // 드래그였으니 click 이벤트 무시
+    if (targetId){
+      reorderInMonth(ended.monthKey, ended.taskId, targetId, position);
+      saveAllLocal();
+      renderCalendar();
+    }
+  });
+
   function renderCalendar(opts = {}){
     const grid = document.getElementById('calendar');
     // 사용자가 보고 있던 가로 스크롤 위치를 보존 — 단, opts.scrollToThisWeek=true면 무시
@@ -1245,9 +1358,13 @@
       textSpan.textContent = titleStr;
       bar.replaceChildren(textSpan);
       bar.dataset.tip = `${titleStr}${t.done ? ' [완료]' : ''}\n${t._origM+1}/${t.start} ~ ${t._origM+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
+      bar.dataset.taskId = t.id;
+      bar.dataset.monthKey = monthKey(t._origY, t._origM);
       bar.style.gridRow = String(3 + t._row);
       bar.style.gridColumn = `${t._startCol + 2} / ${t._endCol + 3}`;
+      bar.addEventListener('mousedown', (e) => startBarDrag(e, bar));
       bar.addEventListener('click', () => {
+        if (bar._suppressNextClick){ bar._suppressNextClick = false; return; }
         focusedTaskId = t.id;
         renderCalendar();
         openTaskModal(t, t._origY, t._origM);
@@ -2399,7 +2516,7 @@
 
   // sIso ~ eIso 범위를 월 경계로 쪼개 monthData[각 달].tasks에 조각으로 분산 저장.
   // 모든 조각은 동일 groupId + fullStart/fullEnd 공유해서 추후 한 번에 수정/삭제 가능.
-  function distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color, done }){
+  function distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color, done, sortIndex }){
     const sd = parseIsoDate(sIso);
     const ed = parseIsoDate(eIso);
     if (!sd || !ed) return [];
@@ -2415,6 +2532,9 @@
       const dayEnd = isEndMonth ? ed.getDate() : lastDay;
       const key = monthKey(y2, m2);
       if (!monthData[key]) monthData[key] = { tasks: [] };
+      // sortIndex 파라미터가 주어지면 모든 piece가 그 값을 공유 (편집 시 원본 위치 보존)
+      // 없으면 각 월에서 max + 1 (신규 task — 맨 아래)
+      const pieceSortIndex = (typeof sortIndex === 'number') ? sortIndex : nextSortIndexFor(key);
       const piece = {
         id: uid(),
         groupId,
@@ -2425,7 +2545,8 @@
         color: color || null,
         done: !!done,
         fullStart: sIso,
-        fullEnd: eIso
+        fullEnd: eIso,
+        sortIndex: pieceSortIndex
       };
       monthData[key].tasks.push(piece);
       created.push(piece);
@@ -2463,10 +2584,11 @@
     const color = document.getElementById('task-modal-swatches').dataset.selectedColor || null;
     const done = getModalDone();
 
-    // 기존 그룹/태스크 제거 후 월별 조각 재분산
+    // 기존 그룹/태스크 제거 후 월별 조각 재분산. 편집이면 원본 sortIndex를 보존해 stack 위치 유지.
     const groupId = (!isNew && task.groupId) ? task.groupId : ('g_' + Math.random().toString(36).slice(2, 9));
+    const preservedSortIndex = (!isNew && task && typeof task.sortIndex === 'number') ? task.sortIndex : undefined;
     if (!isNew) removeTaskOrGroup(task);
-    const pieces = distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color, done });
+    const pieces = distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color, done, sortIndex: preservedSortIndex });
     focusedTaskId = pieces.length > 0 ? pieces[0].id : null;
 
     if (isNew && pieces.length > 0){
@@ -2988,6 +3110,8 @@
       if (e.button !== 0) return; // 좌클릭만
       // 입력/선택 요소는 드래그 시작 안 함
       if (e.target.closest('input, button, select, textarea, a')) return;
+      // task 바 위에서는 바 자체의 reorder/click 핸들러가 처리 — 가로 스크롤 시작 안 함
+      if (e.target.closest('.cal-task-bar')) return;
       isDown = true; didDrag = false;
       startX = e.pageX; startScroll = wrap.scrollLeft;
     });
