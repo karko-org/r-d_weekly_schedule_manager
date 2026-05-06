@@ -324,7 +324,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.41</span>
+      <span class="version">v1.0.42</span>
     </div>
   </header>
 
@@ -710,14 +710,37 @@
   }
 
   function assignRows(tasks){
-    // 엑셀 export도 동일하게 1 task = 1 row (sortIndex 순서) — display와 일관성
+    // 엑셀 export도 동일한 세그먼트 기반 하이브리드: pinned 고정, 나머지 bin-pack
     const sorted = [...tasks].sort((a,b) =>
       ((a.sortIndex ?? 0) - (b.sortIndex ?? 0)) ||
       a.start - b.start ||
       a.end - b.end
     );
-    sorted.forEach((t, idx) => { t._row = idx; });
-    return { rowCount: Math.max(1, sorted.length), ordered: sorted };
+    const rows = []; // rows[i] = [[s, e], ...]
+    function fitsRow(segs, ts, te){
+      for (const [ss, se] of segs){ if (ts <= se && te >= ss) return false; }
+      return true;
+    }
+    sorted.forEach(t => {
+      if (typeof t.row !== 'number') return;
+      while (rows.length <= t.row) rows.push([]);
+      rows[t.row].push([t.start, t.end]);
+      t._row = t.row;
+    });
+    sorted.forEach(t => {
+      if (typeof t.row === 'number') return;
+      let placed = false;
+      for (let i = 0; i < rows.length; i++){
+        if (fitsRow(rows[i], t.start, t.end)){
+          t._row = i;
+          rows[i].push([t.start, t.end]);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed){ t._row = rows.length; rows.push([[t.start, t.end]]); }
+    });
+    return { rowCount: Math.max(1, rows.length), ordered: sorted };
   }
 
   function isInRange(y,m,d, startDate, endDate){
@@ -1167,17 +1190,30 @@
     if (bg) return bg.getBoundingClientRect().width;
     return 30;
   }
-  // 두 task의 sortIndex만 교환 — 다른 task는 영향 없음
-  function swapSortIndex(key, aId, bId){
+  // Pin 기반: task의 .row 필드를 명시 row로 설정 (드래그 시 사용)
+  // .row 있는 task는 bin-pack 무시하고 그 row에 강제 배치, 없는 task는 bin-pack 컴팩트 유지
+  function pinTaskToRow(key, taskId, row){
+    if (!monthData[key]) return false;
+    const t = monthData[key].tasks.find(t => t.id === taskId);
+    if (!t || t.row === row) return false;
+    t.row = row;
+    return true;
+  }
+  // 바 위에 drop 시 — 두 task의 시각적 row를 교환 (둘 다 pin)
+  function pinSwapBars(key, sourceId, targetId){
     if (!monthData[key]) return false;
     const arr = monthData[key].tasks;
-    arr.forEach((t, i) => { if (typeof t.sortIndex !== 'number') t.sortIndex = i; });
-    const a = arr.find(t => t.id === aId);
-    const b = arr.find(t => t.id === bId);
-    if (!a || !b || a === b || a.sortIndex === b.sortIndex) return false;
-    const tmp = a.sortIndex;
-    a.sortIndex = b.sortIndex;
-    b.sortIndex = tmp;
+    const src = arr.find(t => t.id === sourceId);
+    const tgt = arr.find(t => t.id === targetId);
+    if (!src || !tgt || src === tgt) return false;
+    const srcBar = document.querySelector(`.cal-task-bar[data-task-id="${sourceId}"]`);
+    const tgtBar = document.querySelector(`.cal-task-bar[data-task-id="${targetId}"]`);
+    if (!srcBar || !tgtBar) return false;
+    const srcRow = parseInt(srcBar.style.gridRow, 10) - 3;
+    const tgtRow = parseInt(tgtBar.style.gridRow, 10) - 3;
+    if (srcRow === tgtRow) return false;
+    src.row = tgtRow;
+    tgt.row = srcRow;
     return true;
   }
   function isMultiMonthGroup(task){
@@ -1212,18 +1248,8 @@
       const currentRow = parseInt(draggedBar.style.gridRow, 10) - 3;
       if (currentRow === targetRow) return false;
     }
-    // 현재 렌더된 바들 중 targetRow에 있는 다른 바 찾기 (자기 자신 제외) — SWAP
-    const bars = document.querySelectorAll('.cal-task-bar[data-task-id]');
-    for (const b of bars){
-      if (b.dataset.monthKey !== key) continue;
-      if (b.dataset.taskId === draggedId) continue;
-      const gridRowVal = parseInt(b.style.gridRow, 10);
-      if (gridRowVal === 3 + targetRow){
-        // 둘만 자리 교환 (다른 task는 영향 없음)
-        return swapSortIndex(key, draggedId, b.dataset.taskId);
-      }
-    }
-    return false;
+    // bg cell drop은 단순히 source를 그 row에 pin (다른 task는 bin-pack이 알아서)
+    return pinTaskToRow(key, draggedId, targetRow);
   }
   // Ghost — 잡은 바의 클론이 커서를 spring처럼 따라다님 (lerp 기반 rAF 루프)
   let ghostTargetX = 0, ghostTargetY = 0;
@@ -1400,9 +1426,9 @@
           if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, dayDelta)) didChange = true;
         }
       }
-      // 정렬 변경: SWAP (둘만 자리 교환, 다른 task는 영향 없음)
+      // Row 변경: pin 기반 (둘만 row 교환 또는 source만 pin, 다른 task는 bin-pack)
       if (barInd){
-        if (swapSortIndex(ended.monthKey, ended.taskId, barInd.dataset.taskId)) didChange = true;
+        if (pinSwapBars(ended.monthKey, ended.taskId, barInd.dataset.taskId)) didChange = true;
       } else if (bgInd){
         const targetRow = parseInt(bgInd.dataset.row, 10);
         if (Number.isFinite(targetRow)){
@@ -1457,15 +1483,42 @@
         });
       });
     }
-    // 행 배치 — sortIndex 순서대로 1 task = 1 row (bin-pack 제거).
-    // 사용자가 끈 위치 그대로 보존되고, 다일자/단일자 모두 동일하게 예측 가능.
+    // 행 배치 — 하이브리드: 사용자가 끈 task는 .row에 고정, 나머지는 bin-pack(컴팩트).
+    // 세그먼트 기반: row마다 점유된 [start, end] 구간 list 추적 → "BEFORE" 위치 fit도 가능.
     calTasks.sort((a,b) =>
       ((a.sortIndex ?? 0) - (b.sortIndex ?? 0)) ||
       a._startCol - b._startCol ||
       a._endCol - b._endCol
     );
-    calTasks.forEach((t, idx) => { t._row = idx; });
-    const rowCount = Math.max(1, calTasks.length);
+    const rows = []; // rows[i] = [[s, e], ...] 점유 세그먼트
+    function fitsRow(segs, ts, te){
+      for (const [ss, se] of segs){
+        if (ts <= se && te >= ss) return false; // 겹침
+      }
+      return true;
+    }
+    // Pass 1: pinned task를 t.row에 강제 배치
+    calTasks.forEach(t => {
+      if (typeof t.row !== 'number') return;
+      while (rows.length <= t.row) rows.push([]);
+      rows[t.row].push([t._startCol, t._endCol]);
+      t._row = t.row;
+    });
+    // Pass 2: 나머지는 bin-pack greedy (가장 위 row부터 fit 가능한 곳)
+    calTasks.forEach(t => {
+      if (typeof t.row === 'number') return;
+      let placed = false;
+      for (let i = 0; i < rows.length; i++){
+        if (fitsRow(rows[i], t._startCol, t._endCol)){
+          t._row = i;
+          rows[i].push([t._startCol, t._endCol]);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed){ t._row = rows.length; rows.push([[t._startCol, t._endCol]]); }
+    });
+    const rowCount = Math.max(1, rows.length);
 
     const dayCol = calendarExpanded ? `${CAL_EXPANDED_DAY_WIDTH}px` : 'minmax(26px, 1fr)';
     grid.style.gridTemplateColumns = `56px repeat(${total}, ${dayCol})`;
