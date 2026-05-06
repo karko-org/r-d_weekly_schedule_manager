@@ -324,7 +324,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.40</span>
+      <span class="version">v1.0.41</span>
     </div>
   </header>
 
@@ -710,20 +710,14 @@
   }
 
   function assignRows(tasks){
+    // 엑셀 export도 동일하게 1 task = 1 row (sortIndex 순서) — display와 일관성
     const sorted = [...tasks].sort((a,b) =>
+      ((a.sortIndex ?? 0) - (b.sortIndex ?? 0)) ||
       a.start - b.start ||
-      a.end - b.end ||
-      ((a.sortIndex ?? 0) - (b.sortIndex ?? 0))
+      a.end - b.end
     );
-    const rows = [];
-    sorted.forEach(t => {
-      let placed = false;
-      for (let i = 0; i < rows.length; i++){
-        if (rows[i] < t.start){ t._row = i; rows[i] = t.end; placed = true; break; }
-      }
-      if (!placed){ t._row = rows.length; rows.push(t.end); }
-    });
-    return { rowCount: Math.max(1, rows.length), ordered: sorted };
+    sorted.forEach((t, idx) => { t._row = idx; });
+    return { rowCount: Math.max(1, sorted.length), ordered: sorted };
   }
 
   function isInRange(y,m,d, startDate, endDate){
@@ -1463,21 +1457,15 @@
         });
       });
     }
-    // 행 배치 — sortIndex 우선(드래그로 임의 row 이동 가능), 동일 sortIndex는 컬럼 순서로 fallback
+    // 행 배치 — sortIndex 순서대로 1 task = 1 row (bin-pack 제거).
+    // 사용자가 끈 위치 그대로 보존되고, 다일자/단일자 모두 동일하게 예측 가능.
     calTasks.sort((a,b) =>
       ((a.sortIndex ?? 0) - (b.sortIndex ?? 0)) ||
       a._startCol - b._startCol ||
       a._endCol - b._endCol
     );
-    const rows = [];
-    calTasks.forEach(t => {
-      let placed = false;
-      for (let i = 0; i < rows.length; i++){
-        if (rows[i] < t._startCol){ t._row = i; rows[i] = t._endCol; placed = true; break; }
-      }
-      if (!placed){ t._row = rows.length; rows.push(t._endCol); }
-    });
-    const rowCount = Math.max(1, rows.length);
+    calTasks.forEach((t, idx) => { t._row = idx; });
+    const rowCount = Math.max(1, calTasks.length);
 
     const dayCol = calendarExpanded ? `${CAL_EXPANDED_DAY_WIDTH}px` : 'minmax(26px, 1fr)';
     grid.style.gridTemplateColumns = `56px repeat(${total}, ${dayCol})`;
