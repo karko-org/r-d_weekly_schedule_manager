@@ -310,7 +310,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.30</span>
+      <span class="version">v1.0.31</span>
     </div>
   </header>
 
@@ -2099,13 +2099,14 @@
     for (let i = 0; i < MAX_DAYS; i++) cols.push({wch:7});
     ws['!cols'] = cols;
 
-    // 행 높이 (pt) — 헤더만 고정, 데이터 행은 명시하지 않음 → 엑셀이 wrapText 콘텐츠에 맞춰 자동 확장.
+    // 행 높이 (pt) — 데이터 행은 3줄 고정(54pt). wrapText로 셀 폭 안에서 줄바꿈하되 행 높이는 고정.
     const lastRow = rows.length - 1;
     const lastCol = MAX_DAYS;
     const rowHeights = [
       { hpt: 38 }, // R1 제목
       { hpt: 22 }  // R2 일자 헤더
     ];
+    for (let r = 2; r <= lastRow; r++) rowHeights.push({ hpt: 54 });
     ws['!rows'] = rowHeights;
 
     // 빈 셀은 stub cell ({t:'z'})로 만들어 엑셀이 "값 없는 빈 셀"로 인식하게 함.
