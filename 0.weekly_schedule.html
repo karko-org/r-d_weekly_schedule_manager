@@ -307,7 +307,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.24</span>
+      <span class="version">v1.0.25</span>
     </div>
   </header>
 
@@ -810,11 +810,16 @@
           });
         });
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
-        // 월간이 있으면 가장 이른 월로 이동
+        // 월간이 있으면: 오늘 달에 task가 있으면 오늘 달로, 없으면 가장 이른 월로 이동
         const importedMonths = Object.keys(importResult.monthly.parsed).filter(k => importResult.monthly.parsed[k].length > 0).sort();
         if (importedMonths.length > 0){
-          const [y,m] = importedMonths[0].split('-').map((v,i) => i===0 ? parseInt(v,10) : parseInt(v,10)-1);
-          currentYear = y; currentMonth = m;
+          const todayKey = monthKey(todayY, todayM);
+          if (importedMonths.includes(todayKey)){
+            currentYear = todayY; currentMonth = todayM;
+          } else {
+            const [y,m] = importedMonths[0].split('-').map((v,i) => i===0 ? parseInt(v,10) : parseInt(v,10)-1);
+            currentYear = y; currentMonth = m;
+          }
         }
         // 연간 가져오기
         if (importResult.annual.parsed){
