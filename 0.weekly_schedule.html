@@ -306,7 +306,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.33</span>
+      <span class="version">v1.0.34</span>
     </div>
   </header>
 
@@ -1257,8 +1257,12 @@
         });
       });
     }
-    // 컬럼 기반 행 배치
-    calTasks.sort((a,b) => a._startCol - b._startCol || a._endCol - b._endCol);
+    // 컬럼 기반 행 배치 — 동일 (start,end)는 sortIndex 작은 순(stack 위)
+    calTasks.sort((a,b) =>
+      a._startCol - b._startCol ||
+      a._endCol - b._endCol ||
+      ((a.sortIndex ?? 0) - (b.sortIndex ?? 0))
+    );
     const rows = [];
     calTasks.forEach(t => {
       let placed = false;
