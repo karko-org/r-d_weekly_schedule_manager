@@ -103,10 +103,11 @@
   /* 원본 엑셀 색상이 있는 월간 바는 호버 시에도 색상 유지 */
   .cal-task-bar.has-custom-color:hover{filter:brightness(0.92);box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:2}
   .cal-task-bar.has-custom-color.is-focused{box-shadow:0 0 0 2px var(--today)}
-  /* 드래그앤드랍 시각 피드백 */
-  .cal-task-bar.is-dragging{opacity:0.7;cursor:grabbing;z-index:5;box-shadow:0 8px 20px rgba(60,40,20,0.3), 0 0 0 2px var(--accent)}
-  .cal-task-bar.is-drop-above{box-shadow:inset 0 5px 0 var(--accent), 0 0 12px rgba(139,69,19,0.25)}
-  .cal-task-bar.is-drop-below{box-shadow:inset 0 -5px 0 var(--accent), 0 0 12px rgba(139,69,19,0.25)}
+  /* 드래그앤드랍 시각 피드백 — 칸반 스타일 ghost + 슬라이드 */
+  .cal-task-bar.is-dragging{opacity:0.25;cursor:grabbing;box-shadow:none;border-style:dashed}
+  .cal-task-ghost{position:fixed;pointer-events:none;z-index:1000;margin:0;opacity:0.95;box-shadow:0 14px 32px rgba(60,40,20,0.35), 0 0 0 2px var(--accent);transform:rotate(-1.5deg);transition:none}
+  .cal-task-bar.is-drop-above{box-shadow:inset 0 5px 0 var(--accent), 0 0 12px rgba(139,69,19,0.25);transition:box-shadow .12s ease}
+  .cal-task-bar.is-drop-below{box-shadow:inset 0 -5px 0 var(--accent), 0 0 12px rgba(139,69,19,0.25);transition:box-shadow .12s ease}
   /* 바 내부 텍스트 — 한 줄 + ellipsis (truncate 책임) */
   .cal-task-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0}
   /* Hover 툴팁 — body 직속 singleton, calendar-wrap clipping 회피 */
@@ -306,7 +307,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.35</span>
+      <span class="version">v1.0.36</span>
     </div>
   </header>
 
@@ -1143,10 +1144,65 @@
 
   // ---------- 캘린더 바 드래그앤드랍 재정렬 ----------
   const REORDER_THRESHOLD = 5;
-  let barDragState = null; // { bar, taskId, monthKey, startX, startY, mode }
+  let barDragState = null; // { bar, taskId, monthKey, startX, startY, mode, ghostOffsetX, ghostOffsetY }
+  let dragGhostEl = null;
   function clearDropIndicators(){
     document.querySelectorAll('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below').forEach(el => {
       el.classList.remove('is-drop-above', 'is-drop-below');
+    });
+  }
+  // Ghost — 잡은 바의 클론이 커서를 따라다님 (Jira 칸반처럼)
+  function createDragGhost(srcBar, e){
+    const rect = srcBar.getBoundingClientRect();
+    dragGhostEl = srcBar.cloneNode(true);
+    dragGhostEl.classList.add('cal-task-ghost');
+    dragGhostEl.classList.remove('is-dragging');
+    dragGhostEl.style.left = rect.left + 'px';
+    dragGhostEl.style.top = rect.top + 'px';
+    dragGhostEl.style.width = rect.width + 'px';
+    dragGhostEl.style.height = rect.height + 'px';
+    dragGhostEl.style.gridRow = '';
+    dragGhostEl.style.gridColumn = '';
+    document.body.appendChild(dragGhostEl);
+    if (barDragState){
+      barDragState.ghostOffsetX = e.clientX - rect.left;
+      barDragState.ghostOffsetY = e.clientY - rect.top;
+    }
+  }
+  function moveDragGhost(e){
+    if (!dragGhostEl || !barDragState) return;
+    dragGhostEl.style.left = (e.clientX - barDragState.ghostOffsetX) + 'px';
+    dragGhostEl.style.top = (e.clientY - barDragState.ghostOffsetY) + 'px';
+  }
+  function destroyDragGhost(){
+    if (dragGhostEl){ dragGhostEl.remove(); dragGhostEl = null; }
+  }
+  // FLIP — drop 후 영향받은 바들이 새 위치로 슬라이드
+  function snapshotBarPositions(){
+    const positions = new Map();
+    document.querySelectorAll('.cal-task-bar[data-task-id]').forEach(bar => {
+      const r = bar.getBoundingClientRect();
+      positions.set(bar.dataset.taskId, { x: r.left, y: r.top });
+    });
+    return positions;
+  }
+  function animateBarsFromSnapshot(snapshot){
+    document.querySelectorAll('.cal-task-bar[data-task-id]').forEach(bar => {
+      const id = bar.dataset.taskId;
+      const oldPos = snapshot.get(id);
+      if (!oldPos) return;
+      const newRect = bar.getBoundingClientRect();
+      const dx = oldPos.x - newRect.left;
+      const dy = oldPos.y - newRect.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      bar.style.transform = `translate(${dx}px, ${dy}px)`;
+      bar.style.transition = 'none';
+      void bar.offsetHeight; // force reflow
+      requestAnimationFrame(() => {
+        bar.style.transform = '';
+        bar.style.transition = 'transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      });
+      setTimeout(() => { bar.style.transition = ''; bar.style.transform = ''; }, 320);
     });
   }
   function reorderInMonth(key, draggedId, targetId, position){
@@ -1187,10 +1243,12 @@
         barDragState.bar.classList.add('is-dragging');
         document.body.style.cursor = 'grabbing';
         hideCalTip();
+        createDragGhost(barDragState.bar, e);
       }
     }
     if (barDragState.mode === 'reorder'){
       e.preventDefault();
+      moveDragGhost(e);
       clearDropIndicators();
       // source bar를 일시적으로 무시해 elementFromPoint이 그 아래 요소를 잡도록
       barDragState.bar.style.pointerEvents = 'none';
@@ -1209,7 +1267,10 @@
     const ended = barDragState;
     barDragState = null;
     document.body.style.cursor = '';
-    if (ended.mode !== 'reorder') return;
+    if (ended.mode !== 'reorder'){
+      destroyDragGhost();
+      return;
+    }
     ended.bar.classList.remove('is-dragging');
     let targetId = null, position = null;
     const indicator = document.querySelector('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below');
@@ -1220,9 +1281,14 @@
     clearDropIndicators();
     ended.bar._suppressNextClick = true; // 드래그였으니 click 이벤트 무시
     if (targetId){
+      const snapshot = snapshotBarPositions();
+      destroyDragGhost();
       reorderInMonth(ended.monthKey, ended.taskId, targetId, position);
       saveAllLocal();
       renderCalendar();
+      animateBarsFromSnapshot(snapshot);
+    } else {
+      destroyDragGhost();
     }
   });
 
