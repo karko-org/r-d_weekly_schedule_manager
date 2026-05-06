@@ -324,7 +324,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.38</span>
+      <span class="version">v1.0.39</span>
     </div>
   </header>
 
@@ -1194,6 +1194,12 @@
   }
   // sortIndex를 조정해 task가 targetRow 위치에 오도록 — 같은 row에 있는 다른 바 위로 끼워넣기
   function placeTaskAtRow(key, draggedId, targetRow){
+    // 이미 dragged가 targetRow에 있으면 no-op (불필요한 reorder 방지)
+    const draggedBar = document.querySelector(`.cal-task-bar[data-task-id="${draggedId}"]`);
+    if (draggedBar){
+      const currentRow = parseInt(draggedBar.style.gridRow, 10) - 3;
+      if (currentRow === targetRow) return false;
+    }
     // 현재 렌더된 바들 중 targetRow에 있는 다른 바 찾기 (자기 자신 제외)
     const bars = document.querySelectorAll('.cal-task-bar[data-task-id]');
     for (const b of bars){
@@ -1203,10 +1209,11 @@
       if (gridRowVal === 3 + targetRow){
         // 위로 끼워넣기
         reorderInMonth(key, draggedId, b.dataset.taskId, 'above');
-        return;
+        return true;
       }
     }
-    // 해당 row에 자기 자신밖에 없거나 빈 row → sortIndex 변경 안 함 (재렌더 시 알아서 같은 row 유지)
+    // 해당 row에 자기 자신밖에 없거나 빈 row → sortIndex 변경 안 함
+    return false;
   }
   // Ghost — 잡은 바의 클론이 커서를 spring처럼 따라다님 (lerp 기반 rAF 루프)
   let ghostTargetX = 0, ghostTargetY = 0;
@@ -1280,11 +1287,16 @@
       bar.style.transform = `translate(${dx}px, ${dy}px)`;
       bar.style.transition = 'none';
       void bar.offsetHeight; // force reflow
+      const cleanup = () => {
+        bar.style.transition = '';
+        bar.style.transform = '';
+        bar.removeEventListener('transitionend', cleanup);
+      };
+      bar.addEventListener('transitionend', cleanup, { once: true });
       requestAnimationFrame(() => {
         bar.style.transform = '';
-        bar.style.transition = 'transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        bar.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.05)';
       });
-      setTimeout(() => { bar.style.transition = ''; bar.style.transform = ''; }, 380);
     });
   }
   function reorderInMonth(key, draggedId, targetId, position){
@@ -1384,10 +1396,9 @@
       if (Number.isFinite(newDay) && !isMultiMonthGroup(sourceTask)){
         if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, newDay - sourceTask.start)) didChange = true;
       }
-      // row 위치 변경 (sortIndex 조정)
+      // row 위치 변경 (sortIndex 조정) — 이미 같은 row면 no-op
       if (Number.isFinite(targetRow)){
-        placeTaskAtRow(ended.monthKey, ended.taskId, targetRow);
-        didChange = true;
+        if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow)) didChange = true;
       }
     }
 
