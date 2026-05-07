@@ -324,7 +324,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.43</span>
+      <span class="version">v1.0.44</span>
     </div>
   </header>
 
@@ -723,9 +723,14 @@
     }
     sorted.forEach(t => {
       if (typeof t.row !== 'number') return;
-      while (rows.length <= t.row) rows.push([]);
-      rows[t.row].push([t.start, t.end]);
-      t._row = t.row;
+      let row = t.row;
+      while (rows.length <= row) rows.push([]);
+      while (!fitsRow(rows[row], t.start, t.end)){
+        row++;
+        while (rows.length <= row) rows.push([]);
+      }
+      rows[row].push([t.start, t.end]);
+      t._row = row;
     });
     sorted.forEach(t => {
       if (typeof t.row === 'number') return;
@@ -1192,10 +1197,23 @@
   }
   // Pin 기반: task의 .row 필드를 명시 row로 설정 (드래그 시 사용)
   // .row 있는 task는 bin-pack 무시하고 그 row에 강제 배치, 없는 task는 bin-pack 컴팩트 유지
+  // 절대 invariant: 같은 row에 날짜 겹치는 두 task가 동시에 pin되지 않음 (eviction으로 보장)
+  function evictConflictingPins(arr, exemptIds, row, sStart, sEnd){
+    // row에 pin된 task 중 [sStart, sEnd]와 날짜 겹치는 것을 unpin (exemptIds는 제외)
+    arr.forEach(other => {
+      if (exemptIds.includes(other.id)) return;
+      if (other.row !== row) return;
+      if (other.start <= sEnd && other.end >= sStart){
+        delete other.row;
+      }
+    });
+  }
   function pinTaskToRow(key, taskId, row){
     if (!monthData[key]) return false;
-    const t = monthData[key].tasks.find(t => t.id === taskId);
+    const arr = monthData[key].tasks;
+    const t = arr.find(t => t.id === taskId);
     if (!t || t.row === row) return false;
+    evictConflictingPins(arr, [taskId], row, t.start, t.end);
     t.row = row;
     return true;
   }
@@ -1212,6 +1230,10 @@
     const srcRow = parseInt(srcBar.style.gridRow, 10) - 3;
     const tgtRow = parseInt(tgtBar.style.gridRow, 10) - 3;
     if (srcRow === tgtRow) return false;
+    // src가 tgtRow로 갈 때, 그 row에 src와 날짜 겹치는 다른 pin이 있으면 unpin
+    evictConflictingPins(arr, [sourceId, targetId], tgtRow, src.start, src.end);
+    // tgt가 srcRow로 갈 때 동일
+    evictConflictingPins(arr, [sourceId, targetId], srcRow, tgt.start, tgt.end);
     src.row = tgtRow;
     tgt.row = srcRow;
     return true;
@@ -1514,12 +1536,17 @@
       }
       return true;
     }
-    // Pass 1: pinned task를 t.row에 강제 배치
+    // Pass 1: pinned task를 t.row에 배치. 충돌 시 다음 빈 row로 fallback (절대 겹침 X)
     calTasks.forEach(t => {
       if (typeof t.row !== 'number') return;
-      while (rows.length <= t.row) rows.push([]);
-      rows[t.row].push([t._startCol, t._endCol]);
-      t._row = t.row;
+      let row = t.row;
+      while (rows.length <= row) rows.push([]);
+      while (!fitsRow(rows[row], t._startCol, t._endCol)){
+        row++;
+        while (rows.length <= row) rows.push([]);
+      }
+      rows[row].push([t._startCol, t._endCol]);
+      t._row = row;
     });
     // Pass 2: 나머지는 bin-pack greedy (가장 위 row부터 fit 가능한 곳)
     calTasks.forEach(t => {
