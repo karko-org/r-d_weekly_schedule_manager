@@ -324,7 +324,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.42</span>
+      <span class="version">v1.0.43</span>
     </div>
   </header>
 
@@ -1391,7 +1391,24 @@
       } else {
         const bgTarget = elBelow ? elBelow.closest('.cal-bg') : null;
         if (bgTarget && bgTarget.dataset.monthKey === barDragState.monthKey){
-          bgTarget.classList.add('is-drop-target');
+          // 다일자 task 전체 너비 highlight — drop preview = 실제 landing area
+          const sourceTask = monthData[barDragState.monthKey] && monthData[barDragState.monthKey].tasks.find(t => t.id === barDragState.taskId);
+          const targetRow = parseInt(bgTarget.dataset.row, 10);
+          if (sourceTask && Number.isFinite(targetRow)){
+            const duration = sourceTask.end - sourceTask.start + 1;
+            const isMulti = isMultiMonthGroup(sourceTask);
+            const dayWidth = getCalendarDayWidth();
+            const cursorDxPx = e.clientX - barDragState.startX;
+            const dayDelta = isMulti ? 0 : Math.round(cursorDxPx / dayWidth);
+            const newStart = sourceTask.start + dayDelta;
+            const newEnd = newStart + duration - 1;
+            for (let d = newStart; d <= newEnd; d++){
+              const cell = document.querySelector(`.cal-bg[data-row="${targetRow}"][data-day="${d}"][data-month-key="${barDragState.monthKey}"]`);
+              if (cell) cell.classList.add('is-drop-target');
+            }
+          } else {
+            bgTarget.classList.add('is-drop-target');
+          }
         }
       }
     }
