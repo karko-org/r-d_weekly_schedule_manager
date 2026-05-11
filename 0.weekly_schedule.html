@@ -324,7 +324,7 @@
         
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.44</span>
+      <span class="version">v1.0.45</span>
     </div>
   </header>
 
@@ -2674,6 +2674,8 @@
   let modalCtx = null; // { task, y, m }
 
   function openTaskModal(task, y, m, isNew){
+    // 모달 열리면 hover 툴팁은 무조건 닫기 (잔상 방지)
+    hideCalTip();
     modalCtx = { task, y, m, isNew: !!isNew };
     const titleInput = document.getElementById('modal-title-input');
     const startInput = document.getElementById('modal-start-input');
