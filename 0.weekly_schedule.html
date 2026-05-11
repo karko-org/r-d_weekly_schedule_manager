@@ -42,18 +42,19 @@
 
   #input-view{max-width:1400px;margin:0 auto;padding:28px 32px 60px}
 
-  .app-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid var(--line);margin-bottom:24px;gap:16px;flex-wrap:wrap}
-  .brand{display:flex;align-items:baseline;gap:14px}
-  .brand-mark{font-weight:800;font-size:24px;letter-spacing:-0.02em;color:var(--accent);font-family:var(--mono)}
-  .brand-title{font-size:17px;color:var(--ink-2);letter-spacing:-0.01em}
-  .version{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--surface);padding:4px 10px;border:1px solid var(--line);border-radius:999px;letter-spacing:0.02em}
+  .app-header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0;margin-bottom:20px;border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:baseline;gap:14px;margin-right:auto}
+  .brand-mark{font-weight:800;font-size:22px;letter-spacing:-0.02em;color:var(--accent);font-family:var(--mono)}
+  .brand-title{font-size:15px;color:var(--ink-2);letter-spacing:-0.01em}
+  .header-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .version{display:inline-flex;align-items:center;font-family:var(--mono);font-size:13px;font-weight:500;color:var(--muted);background:var(--surface);padding:10px 14px;border:1px solid var(--line);border-radius:8px;letter-spacing:0.02em;height:40px;box-sizing:border-box}
 
   /* File status indicator */
-  .file-status{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:8px;font-size:12px;font-family:var(--mono);border:1px solid var(--line);background:var(--surface);transition:all .15s}
+  .file-status{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;font-size:13px;font-family:inherit;font-weight:500;border:1px solid var(--line);background:var(--surface);transition:all .15s;letter-spacing:-0.01em;height:40px;box-sizing:border-box}
   .file-status.is-connected{background:var(--success-bg);border-color:var(--success);color:var(--success)}
   .file-status.is-unsupported{background:var(--this-week);border-color:var(--this-week-border);color:var(--bar-accent-ink)}
   .file-status-text{font-weight:600;letter-spacing:-0.01em}
-  .file-status-name{color:var(--muted);font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file-status-name{color:var(--muted);font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:12px}
   .file-status.is-connected .file-status-name{color:var(--ink-2)}
   .disconnect-btn{font-size:11px;color:var(--muted);padding:3px 8px;border-radius:4px;border:1px solid transparent;transition:all .15s;margin-left:4px}
   .disconnect-btn:hover{color:var(--today);border-color:var(--today);background:var(--surface)}
@@ -201,9 +202,7 @@
   .add-task-btn{margin-top:10px;padding:11px;font-size:13px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;transition:all .15s;width:100%}
   .add-task-btn:hover{color:var(--accent);border-color:var(--accent);border-style:solid;background:var(--accent-soft)}
 
-  .actions{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0;margin-bottom:20px;border-bottom:1px solid var(--line-soft)}
-  .actions-left{flex:1;display:flex;gap:10px;flex-wrap:wrap}
-  .btn-secondary,.btn-primary,.btn-save{padding:13px 22px;font-size:14px;font-weight:600;border-radius:10px;transition:all .15s;letter-spacing:-0.01em}
+  .btn-secondary,.btn-primary,.btn-save{padding:10px 16px;font-size:13px;font-weight:600;border-radius:8px;transition:all .15s;letter-spacing:-0.01em;height:40px;box-sizing:border-box;display:inline-flex;align-items:center}
   .btn-secondary{color:var(--ink);border:1px solid var(--line);background:var(--surface)}
   .btn-secondary:hover{border-color:var(--ink)}
   .btn-primary{color:var(--surface);background:var(--ink)}
@@ -319,22 +318,16 @@
       <span class="brand-mark">KAR</span>
       <span class="brand-title">업무 일정 캘린더</span>
     </div>
-    <div style="display:flex;align-items:center;gap:12px">
+    <div class="header-actions">
+      <button class="btn-secondary" id="btn-export-new">새 파일로 내보내기</button>
+      <button class="btn-secondary" id="btn-connect">📂 엑셀 파일 연결</button>
+      <button class="btn-save" id="btn-save" disabled>저장</button>
       <div class="file-status" id="file-status">
-        
         <span class="file-status-text">파일 미연결</span>
       </div>
-      <span class="version">v1.0.45</span>
+      <span class="version">v1.0.46</span>
     </div>
   </header>
-
-  <div class="actions">
-    <div class="actions-left">
-      <button class="btn-secondary" id="btn-export-new">새 파일로 내보내기</button>
-    </div>
-    <button class="btn-secondary" id="btn-connect">📂 엑셀 파일 연결</button>
-    <button class="btn-save" id="btn-save" disabled>저장</button>
-  </div>
   <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
 
   <nav class="view-tabs" role="tablist" aria-label="시트 전환">
