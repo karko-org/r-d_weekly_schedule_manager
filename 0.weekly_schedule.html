@@ -333,7 +333,6 @@
 
   <nav class="view-tabs" role="tablist" aria-label="시트 전환">
     <button class="view-tab is-active" data-view="monthly" role="tab" aria-selected="true"><span class="view-tab-icon">📅</span>월간 캘린더</button>
-    <button class="view-tab" data-view="annual" role="tab" aria-selected="false"><span class="view-tab-icon">🗓</span>연간 계획서</button>
   </nav>
 
   <section id="monthly-panel">
@@ -613,8 +612,8 @@
     updateSaveButtonState();
   }
   function loadCurrentView(){
-    try{ const v = localStorage.getItem(VIEW_KEY); return (v === 'annual') ? 'annual' : 'monthly'; }
-    catch(e){ return 'monthly'; }
+    try{ localStorage.setItem(VIEW_KEY, 'monthly'); }catch(e){}
+    return 'monthly';
   }
   function loadAnnualYear(){
     try{
@@ -823,8 +822,7 @@
       const ab = await file.arrayBuffer();
       const importResult = tryImportExcel(ab, file.name);
       const monthlyCount = importResult.monthly.count;
-      const annualCount = importResult.annual.count;
-      const totalCount = monthlyCount + annualCount;
+      const totalCount = monthlyCount;
 
       // 파일 선택 = 그 파일 내용으로 교체 (추가 confirm 없음)
       if (totalCount > 0){
@@ -850,19 +848,6 @@
             currentYear = y; currentMonth = m;
           }
         }
-        // 연간 가져오기
-        if (importResult.annual.parsed){
-          const a = importResult.annual.parsed;
-          const yearKey = String(a.year);
-          annualData = {}; // 교체 모드에서는 전체 교체
-          annualData[yearKey] = a;
-          currentAnnualYear = a.year;
-          try{ localStorage.setItem(ANNUAL_STORAGE_KEY, JSON.stringify(annualData)); }catch(e){}
-          try{ localStorage.setItem(ANNUAL_YEAR_KEY, String(a.year)); }catch(e){}
-        } else {
-          annualData = {};
-          try{ localStorage.setItem(ANNUAL_STORAGE_KEY, '{}'); }catch(e){}
-        }
       }
 
       // Save handle to IndexedDB for persistence
@@ -880,12 +865,10 @@
       renderMonthHeader();
       renderCalendar();
       renderThisWeek();
-      if (currentView === 'annual') renderAnnual();
 
       if (totalCount > 0){
         const parts = [];
         if (monthlyCount > 0) parts.push(`월간 ${monthlyCount}개`);
-        if (annualCount > 0) parts.push(`연간 ${annualCount}개`);
         showToast(`✓ "${file.name}" 연결됨 · ${parts.join(', ')} 불러옴`, 'success');
       } else {
         showToast(`✓ "${file.name}" 연결됨 (빈 파일)`, 'success');
@@ -899,8 +882,7 @@
 
   async function disconnectFile(){
     const hasMonthly = Object.values(monthData).some(md => (md.tasks||[]).length > 0);
-    const hasAnnual = Object.values(annualData).some(a => (a.projects||[]).some(p => (p.bars||[]).length > 0));
-    const hasData = hasMonthly || hasAnnual;
+    const hasData = hasMonthly;
 
     let msg = null;
     if (isDirty && fileHandle){
@@ -916,17 +898,13 @@
 
     // 데이터 초기화
     monthData = {};
-    annualData = {};
     try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
-    try { localStorage.removeItem(ANNUAL_STORAGE_KEY); } catch(e){}
-    try { localStorage.removeItem(ANNUAL_YEAR_KEY); } catch(e){}
 
     // 뷰 상태 리셋
     focusedTaskId = null;
     focusedBarId = null;
     currentYear = todayY;
     currentMonth = todayM;
-    currentAnnualYear = new Date().getFullYear();
     twSelectedWeek = 'this';
     isDirty = false;
 
@@ -940,7 +918,6 @@
     renderMonthHeader();
     renderCalendar();
     renderThisWeek();
-    if (currentView === 'annual') renderAnnual();
     showToast('초기화되었습니다', 'success');
   }
 
@@ -966,7 +943,14 @@
         if (!opts.silent) showToast('파일 쓰기 권한이 거부됐습니다', 'error');
         return;
       }
-      const buf = buildExcelBuffer();
+      let baseArrayBuffer = null;
+      try {
+        const file = await fileHandle.getFile();
+        baseArrayBuffer = await file.arrayBuffer();
+      } catch(e){
+        console.warn('Could not read connected workbook before save:', e);
+      }
+      const buf = buildExcelBuffer({ baseArrayBuffer });
       const writable = await fileHandle.createWritable();
       await writable.write(buf);
       await writable.close();
@@ -988,8 +972,7 @@
 
   async function exportAsNewFile(){
     const monthKeys = Object.keys(monthData).filter(k => (monthData[k].tasks || []).length > 0);
-    const hasAnnual = Object.values(annualData).some(a => a && (a.projects || []).some(p => (p.bars || []).length > 0));
-    if (monthKeys.length === 0 && !hasAnnual){
+    if (monthKeys.length === 0){
       alert('입력된 업무가 없습니다.');
       return;
     }
@@ -2631,33 +2614,37 @@
     return ws;
   }
 
-  function buildExcelBuffer(){
-    const wb = XLSX.utils.book_new();
+  function buildExcelBuffer(opts = {}){
+    const wb = opts.baseArrayBuffer
+      ? XLSX.read(new Uint8Array(opts.baseArrayBuffer), { type: 'array', cellStyles: true })
+      : XLSX.utils.book_new();
     const monthKeys = Object.keys(monthData).filter(k => (monthData[k].tasks || []).length > 0);
     const hasMonthly = monthKeys.length > 0;
+    const appendMonthlySheet = () => {
+      let name = 'Sheet2';
+      if (wb.SheetNames.includes(name)){
+        let n = 2;
+        while (wb.SheetNames.includes(`${name}_${n}`)) n++;
+        name = `${name}_${n}`;
+      }
+      XLSX.utils.book_append_sheet(wb, buildMonthlySheet(), name);
+    };
 
-    // 연간 데이터가 있는 연도들 (바가 하나라도 있는 것만)
-    const annualYears = Object.keys(annualData).filter(k => {
-      const a = annualData[k];
-      return a && (a.projects || []).some(p => (p.bars || []).length > 0);
-    });
-    // 현재 선택된 연도를 우선 사용. 없으면 첫 번째.
-    let annualToWrite = null;
-    if (annualData[String(currentAnnualYear)] && (annualData[String(currentAnnualYear)].projects || []).some(p => (p.bars || []).length > 0)){
-      annualToWrite = annualData[String(currentAnnualYear)];
-    } else if (annualYears.length > 0){
-      annualToWrite = annualData[annualYears[0]];
+    if (opts.baseArrayBuffer){
+      const monthlySheetNames = wb.SheetNames.filter(name => detectSheetKind(wb.Sheets[name]) === 'monthly');
+      monthlySheetNames.forEach(name => {
+        delete wb.Sheets[name];
+        const idx = wb.SheetNames.indexOf(name);
+        if (idx >= 0) wb.SheetNames.splice(idx, 1);
+      });
     }
 
-    if (annualToWrite){
-      XLSX.utils.book_append_sheet(wb, buildAnnualSheet(annualToWrite), 'Sheet1');
+    if (hasMonthly || opts.baseArrayBuffer){
+      appendMonthlySheet();
     }
-    if (hasMonthly){
-      XLSX.utils.book_append_sheet(wb, buildMonthlySheet(), 'Sheet2');
-    }
-    // 양쪽 다 없으면 빈 Sheet2 (기존 동작 유지)
-    if (!annualToWrite && !hasMonthly){
-      XLSX.utils.book_append_sheet(wb, buildMonthlySheet(), 'Sheet2');
+    // 데이터가 없어도 저장 가능한 기본 월간 시트를 유지
+    if (!hasMonthly && !opts.baseArrayBuffer && wb.SheetNames.length === 0){
+      appendMonthlySheet();
     }
 
     return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
@@ -3164,7 +3151,7 @@
 
   // ---------- Annual View (Sheet1) ----------
   function setView(kind){
-    currentView = (kind === 'annual') ? 'annual' : 'monthly';
+    currentView = 'monthly';
     document.getElementById('monthly-panel').hidden = (currentView !== 'monthly');
     document.getElementById('annual-panel').hidden = (currentView !== 'annual');
     document.querySelectorAll('.view-tab').forEach(b => {
@@ -3173,7 +3160,6 @@
       b.setAttribute('aria-selected', String(active));
     });
     try{ localStorage.setItem(VIEW_KEY, currentView); }catch(e){}
-    if (currentView === 'annual') renderAnnual();
   }
 
   function changeAnnualYear(delta){
