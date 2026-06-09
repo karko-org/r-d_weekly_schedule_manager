@@ -36,11 +36,11 @@
     --mono:'JetBrains Mono','SF Mono',ui-monospace,monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{font-family:'Pretendard',system-ui,sans-serif;color:var(--ink);background:var(--bg);font-feature-settings:"ss06","kern";-webkit-font-smoothing:antialiased}
+  html,body{min-height:100%;font-family:'Pretendard',system-ui,sans-serif;color:var(--ink);background:var(--bg);font-feature-settings:"ss06","kern";-webkit-font-smoothing:antialiased}
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
   input{font-family:inherit;color:inherit}
 
-  #input-view{max-width:1400px;margin:0 auto;padding:28px 32px 60px}
+  #input-view{width:100%;min-height:100vh;max-width:1400px;margin:0 auto;padding:28px 32px;display:grid;grid-template-rows:auto minmax(24px,3.5fr) auto minmax(36px,6.5fr)}
 
   .app-header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0;margin-bottom:20px;border-bottom:1px solid var(--line)}
   .brand{display:flex;align-items:baseline;gap:14px;margin-right:auto}
@@ -378,9 +378,11 @@
   .modal-overlay{background:rgba(15,23,42,0.48);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
   .modal{box-shadow:0 18px 48px rgba(15,23,42,0.22);animation:none}
   .modal-overlay.is-open{animation:none}
+  .app-header{grid-row:1}
+  .schedule-body{grid-row:3}
 
   @media (max-width: 760px){
-    #input-view{padding:18px 14px 48px}
+    #input-view{min-height:0;padding:18px 14px 48px;display:block}
     .app-header{align-items:flex-start}
     .header-actions{width:100%}
     .header-actions > button{flex:1 1 130px;justify-content:center}
@@ -421,6 +423,7 @@
   <div class="version">v1.0.47</div>
   <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
 
+  <div class="schedule-body">
   <section id="monthly-panel">
   <section class="month-control">
     <button class="nav-btn" id="prev-month" aria-label="이전 달">◀</button>
@@ -489,6 +492,7 @@
     <strong>이후:</strong> <kbd>저장</kbd> 또는 <kbd>Ctrl+S</kbd> 누르면 연결된 파일에 조용히 덮어쓰기됩니다<br>
     <span style="color:var(--muted);font-size:11px">※ 파일 연결 창은 자동으로 이전에 선택한 엑셀 파일이 있던 폴더에서 열립니다</span>
   </p>
+  </div>
 </main>
 
 <!-- Annual Bar Detail Modal -->
