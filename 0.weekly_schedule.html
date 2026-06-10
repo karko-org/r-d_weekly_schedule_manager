@@ -746,6 +746,7 @@
     try{
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
       ensureSortIndices(data);
+      normalizeTaskPiecesToFullRanges(data);
       return data;
     } catch(e){ return {}; }
   }
@@ -759,6 +760,31 @@
       });
     });
   }
+  function normalizeTaskPiecesToFullRanges(data){
+    if (!data) return;
+    Object.keys(data).forEach(key => {
+      const md = data[key];
+      if (!md || !Array.isArray(md.tasks)) return;
+      const parts = key.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      if (!Number.isFinite(y) || !Number.isFinite(m)) return;
+      const monthStart = new Date(y, m, 1);
+      const monthEnd = new Date(y, m, daysInMonth(y, m));
+      md.tasks.forEach(t => {
+        const fs = parseIsoDate(t.fullStart);
+        const fe = parseIsoDate(t.fullEnd);
+        if (!fs || !fe) return;
+        if (fe < monthStart || fs > monthEnd) return;
+        const pieceStart = fs > monthStart ? fs.getDate() : 1;
+        const pieceEnd = fe < monthEnd ? fe.getDate() : monthEnd.getDate();
+        if (Number.isFinite(pieceStart) && Number.isFinite(pieceEnd) && pieceStart <= pieceEnd){
+          t.start = pieceStart;
+          t.end = pieceEnd;
+        }
+      });
+    });
+  }
   function nextSortIndexFor(key){
     const arr = (monthData[key] && monthData[key].tasks) || [];
     if (!arr.length) return 0;
@@ -767,6 +793,7 @@
     return (max === -Infinity ? 0 : max + 1);
   }
   function saveAllLocal(){
+    normalizeTaskPiecesToFullRanges(monthData);
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(monthData)); }catch(e){}
     isDirty = true;
     updateSaveButtonState();
@@ -1320,6 +1347,8 @@
     const m = parseInt(parts[1], 10) - 1;
     const lastDay = daysInMonth(y, m);
     const duration = task.end - task.start;
+    const oldStart = task.start;
+    const oldEnd = task.end;
     let newStart = task.start + deltaDays;
     let newEnd = task.end + deltaDays;
     if (newStart < 1){ newStart = 1; newEnd = newStart + duration; }
@@ -1327,7 +1356,45 @@
     if (newStart === task.start && newEnd === task.end) return false;
     task.start = newStart;
     task.end = newEnd;
+    syncTaskFullRangeAfterDrag(task, key, newStart - oldStart, oldStart, oldEnd);
     return true;
+  }
+  function syncTaskFullRangeAfterDrag(task, key, actualDeltaDays, oldStart, oldEnd){
+    const parts = key.split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const fallbackStart = fmtISO(new Date(y, m, task.start));
+    const fallbackEnd = fmtISO(new Date(y, m, task.end));
+    let nextFullStart = fallbackStart;
+    let nextFullEnd = fallbackEnd;
+
+    const fs = parseIsoDate(task.fullStart);
+    const fe = parseIsoDate(task.fullEnd);
+    if (fs && fe && actualDeltaDays !== 0){
+      nextFullStart = fmtISO(addDays(fs, actualDeltaDays));
+      nextFullEnd = fmtISO(addDays(fe, actualDeltaDays));
+    } else if (task.fullStart || task.fullEnd){
+      const oldFs = fmtISO(new Date(y, m, oldStart));
+      const oldFe = fmtISO(new Date(y, m, oldEnd));
+      nextFullStart = task.fullStart === oldFs ? fallbackStart : (task.fullStart || fallbackStart);
+      nextFullEnd = task.fullEnd === oldFe ? fallbackEnd : (task.fullEnd || fallbackEnd);
+    }
+
+    if (task.groupId){
+      Object.keys(monthData).forEach(k => {
+        const tasks = monthData[k] && monthData[k].tasks;
+        if (!Array.isArray(tasks)) return;
+        tasks.forEach(t => {
+          if (t.groupId === task.groupId){
+            t.fullStart = nextFullStart;
+            t.fullEnd = nextFullEnd;
+          }
+        });
+      });
+    } else {
+      task.fullStart = nextFullStart;
+      task.fullEnd = nextFullEnd;
+    }
   }
   // sortIndex를 조정해 task가 targetRow 위치에 오도록 — 같은 row에 있는 다른 바 위로 끼워넣기
   function placeTaskAtRow(key, draggedId, targetRow){
