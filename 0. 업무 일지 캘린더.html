@@ -420,7 +420,7 @@
       </div>
     </div>
   </header>
-  <div class="version">v1.0.47</div>
+  <div class="version">v1.0.49</div>
   <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
 
   <div class="schedule-body">
@@ -687,6 +687,7 @@
   let fileHandle = null;
   let lastFileHandle = null; // 초기화되어도 유지되는 '마지막 연결 파일' — 파일 선택창 startIn 힌트용
   let isDirty = false;
+  let isSavingToConnectedFile = false;
   let annualData = loadAnnualAll();
   let currentView = loadCurrentView();
   let currentAnnualYear = loadAnnualYear();
@@ -799,6 +800,12 @@
     updateSaveButtonState();
     scheduleAutoSave();
   }
+  function excelLibrariesReady(requireZip = false){
+    return typeof XLSX !== 'undefined' && (!requireZip || typeof fflate !== 'undefined');
+  }
+  function showExcelLibraryLoadError(){
+    showToast('엑셀 처리 라이브러리가 로드되지 않았습니다. 인터넷 연결 후 다시 열어주세요', 'error', 5000);
+  }
   // 자동 저장 — 변경 후 1.5초 동안 추가 변경 없으면 엑셀 파일에 조용히 저장
   let autoSaveTimer = null;
   function scheduleAutoSave(){
@@ -901,6 +908,10 @@
   async function connectExcelFile(){
     if (!FS_API_SUPPORTED){
       alert('이 브라우저는 파일 연결 기능을 지원하지 않습니다.\nChrome 또는 Edge 최신 버전을 사용해주세요.');
+      return;
+    }
+    if (!excelLibrariesReady(true)){
+      alert('엑셀 처리 라이브러리가 로드되지 않았습니다.\n인터넷 연결을 확인한 뒤 Chrome 또는 Edge에서 다시 열어주세요.');
       return;
     }
     try {
@@ -1054,10 +1065,20 @@
       if (!opts.silent) showToast('먼저 파일을 연결해주세요', 'error');
       return;
     }
+    if (!excelLibrariesReady(true)){
+      if (!opts.silent) showExcelLibraryLoadError();
+      return;
+    }
+    if (isSavingToConnectedFile){
+      if (!opts.silent) showToast('저장 중입니다. 잠시만 기다려주세요', 'error', 1800);
+      return;
+    }
+    isSavingToConnectedFile = true;
+    updateSaveButtonState();
     try {
       const ok = await ensurePermission(fileHandle, 'readwrite', !opts.silent);
       if (!ok){
-        if (!opts.silent) showToast('파일 쓰기 권한이 거부됐습니다', 'error');
+        if (!opts.silent) showToast('파일 쓰기 권한이 없습니다. 엑셀 파일을 다시 연결해주세요', 'error', 4000);
         return;
       }
       let baseArrayBuffer = null;
@@ -1081,9 +1102,14 @@
       console.error(err);
       if (err.name === 'NotAllowedError'){
         showToast('파일 접근 권한이 거부됐습니다. 파일을 다시 연결해주세요', 'error', 4000);
+      } else if (err.name === 'NotFoundError'){
+        showToast('연결된 파일을 찾을 수 없습니다. 엑셀 파일을 다시 연결해주세요', 'error', 4000);
       } else if (!opts.silent){
-        showToast('저장 실패: ' + err.message, 'error', 4000);
+        showToast('저장 실패: 엑셀 파일을 다시 연결한 뒤 저장해주세요', 'error', 4000);
       }
+    } finally {
+      isSavingToConnectedFile = false;
+      updateSaveButtonState();
     }
   }
 
@@ -1091,6 +1117,10 @@
     const monthKeys = Object.keys(monthData).filter(k => (monthData[k].tasks || []).length > 0);
     if (monthKeys.length === 0){
       alert('입력된 업무가 없습니다.');
+      return;
+    }
+    if (!excelLibrariesReady()){
+      showExcelLibraryLoadError();
       return;
     }
     const buf = buildExcelBuffer();
@@ -1134,7 +1164,7 @@
 
     if (!FS_API_SUPPORTED){
       el.className = 'file-status is-unsupported';
-      el.innerHTML = `<span class="file-status-text">이 브라우저는 저장 기능 미지원</span><span class="file-status-name">Chrome/Edge 권장</span>`;
+      el.innerHTML = `<span class="file-status-text">저장 기능 미지원</span><span class="file-status-name">Chrome/Edge 권장</span>`;
       document.getElementById('btn-connect').disabled = true;
       document.getElementById('btn-connect').style.display = 'none';
       saveBtn.disabled = true;
@@ -1157,8 +1187,8 @@
         <button class="disconnect-btn" id="disconnect-btn" title="연결 해제 및 초기화">✕</button>
       `;
       document.getElementById('disconnect-btn').addEventListener('click', (e) => { e.stopPropagation(); disconnectFile(); });
-      saveBtn.disabled = false;
-      saveBtn.textContent = '저장';
+      saveBtn.disabled = isSavingToConnectedFile;
+      saveBtn.textContent = isSavingToConnectedFile ? '저장 중' : '저장';
     }
   }
 
@@ -1169,11 +1199,11 @@
       saveBtn.disabled = true;
       return;
     }
-    saveBtn.disabled = false;
-    saveBtn.textContent = '저장';
+    saveBtn.disabled = isSavingToConnectedFile;
+    saveBtn.textContent = isSavingToConnectedFile ? '저장 중' : '저장';
     // Also update status label
     const statusText = document.querySelector('#file-status .file-status-text');
-    if (statusText) statusText.textContent = isDirty ? '변경됨' : '동기화됨';
+    if (statusText) statusText.textContent = isSavingToConnectedFile ? '저장 중' : (isDirty ? '변경됨' : '동기화됨');
   }
 
   // ---------- Top bar ----------
@@ -2142,6 +2172,29 @@
     }
   }
 
+  const MAX_THEME_XML_BYTES = 2 * 1024 * 1024;
+  const COMPACT_OFFICE_THEME_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme"><a:themeElements><a:clrScheme name="Office"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1F497D"/></a:dk2><a:lt2><a:srgbClr val="EEECE1"/></a:lt2><a:accent1><a:srgbClr val="4F81BD"/></a:accent1><a:accent2><a:srgbClr val="C0504D"/></a:accent2><a:accent3><a:srgbClr val="9BBB59"/></a:accent3><a:accent4><a:srgbClr val="8064A2"/></a:accent4><a:accent5><a:srgbClr val="4BACC6"/></a:accent5><a:accent6><a:srgbClr val="F79646"/></a:accent6><a:hlink><a:srgbClr val="0000FF"/></a:hlink><a:folHlink><a:srgbClr val="800080"/></a:folHlink></a:clrScheme><a:fontScheme name="Office"><a:majorFont><a:latin typeface="Cambria"/><a:ea typeface=""/><a:cs typeface=""/><a:font script="Jpan" typeface="ＭＳ Ｐゴシック"/><a:font script="Hang" typeface="맑은 고딕"/><a:font script="Hans" typeface="宋体"/><a:font script="Hant" typeface="新細明體"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/><a:font script="Jpan" typeface="ＭＳ Ｐゴシック"/><a:font script="Hang" typeface="맑은 고딕"/><a:font script="Hans" typeface="宋体"/><a:font script="Hant" typeface="新細明體"/></a:minorFont></a:fontScheme><a:fmtScheme name="Office"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"/></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"/></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill></a:fillStyleLst><a:lnStyleLst><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln><a:ln w="25400" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln><a:ln w="38100" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>`;
+
+  function sanitizeWorkbookForXlsxRead(arrayBuffer){
+    if (!arrayBuffer || typeof fflate === 'undefined') return arrayBuffer;
+    try {
+      const files = fflate.unzipSync(new Uint8Array(arrayBuffer));
+      const encoder = new TextEncoder();
+      let changed = false;
+      Object.keys(files).forEach(path => {
+        if (/^xl\/theme\/theme\d+\.xml$/i.test(path) && files[path].length > MAX_THEME_XML_BYTES){
+          files[path] = encoder.encode(COMPACT_OFFICE_THEME_XML);
+          changed = true;
+        }
+      });
+      return changed ? fflate.zipSync(files, { level: 6 }) : arrayBuffer;
+    } catch(err){
+      console.warn('Workbook theme sanitize failed:', err);
+      return arrayBuffer;
+    }
+  }
+
   // ---------- Excel Import ----------
   // 시트가 월간(1~31일 헤더), 연간(1~52 주 순), 또는 unknown 인지 판별.
   function detectSheetKind(ws){
@@ -2171,9 +2224,10 @@
   function tryImportExcel(arrayBuffer, filename){
     const result = { monthly: { parsed: {}, count: 0, sheet: null }, annual: { parsed: null, count: 0, sheet: null } };
     try {
-      const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellStyles: true });
+      const safeArrayBuffer = sanitizeWorkbookForXlsxRead(arrayBuffer);
+      const wb = XLSX.read(new Uint8Array(safeArrayBuffer), { type: 'array', cellStyles: true });
       // MCE-aware 색상 맵 — xlsx-js-style이 놓친 스타일 복구
-      const mceColorMap = buildMceStyleMap(arrayBuffer);
+      const mceColorMap = buildMceStyleMap(safeArrayBuffer);
       for (const sheetName of wb.SheetNames){
         const ws = wb.Sheets[sheetName];
         const kind = detectSheetKind(ws);
@@ -2772,8 +2826,9 @@
   }
 
   function buildExcelBuffer(opts = {}){
-    const wb = opts.baseArrayBuffer
-      ? XLSX.read(new Uint8Array(opts.baseArrayBuffer), { type: 'array', cellStyles: true })
+    const safeBaseArrayBuffer = opts.baseArrayBuffer ? sanitizeWorkbookForXlsxRead(opts.baseArrayBuffer) : null;
+    const wb = safeBaseArrayBuffer
+      ? XLSX.read(new Uint8Array(safeBaseArrayBuffer), { type: 'array', cellStyles: true })
       : XLSX.utils.book_new();
     const monthKeys = Object.keys(monthData).filter(k => (monthData[k].tasks || []).length > 0);
     const hasMonthly = monthKeys.length > 0;
@@ -2787,7 +2842,7 @@
       XLSX.utils.book_append_sheet(wb, buildMonthlySheet(), name);
     };
 
-    if (opts.baseArrayBuffer){
+    if (safeBaseArrayBuffer){
       const monthlySheetNames = wb.SheetNames.filter(name => detectSheetKind(wb.Sheets[name]) === 'monthly');
       monthlySheetNames.forEach(name => {
         delete wb.Sheets[name];
@@ -2796,11 +2851,11 @@
       });
     }
 
-    if (hasMonthly || opts.baseArrayBuffer){
+    if (hasMonthly || safeBaseArrayBuffer){
       appendMonthlySheet();
     }
     // 데이터가 없어도 저장 가능한 기본 월간 시트를 유지
-    if (!hasMonthly && !opts.baseArrayBuffer && wb.SheetNames.length === 0){
+    if (!hasMonthly && !safeBaseArrayBuffer && wb.SheetNames.length === 0){
       appendMonthlySheet();
     }
 
@@ -3648,12 +3703,19 @@
   });
 
   // Keyboard shortcuts
-  document.addEventListener('keydown', (e) => {
-    // Ctrl/Cmd + S : save
-    if ((e.ctrlKey || e.metaKey) && e.key === 's'){
+  function handleGlobalKeydown(e){
+    // Ctrl/Cmd + S : 브라우저의 "페이지 저장" 대신 앱 저장만 실행
+    const isSaveShortcut = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && ((e.key || '').toLowerCase() === 's' || e.code === 'KeyS');
+    if (isSaveShortcut){
       e.preventDefault();
-      if (fileHandle && FS_API_SUPPORTED) saveToConnectedFile();
-      else if (FS_API_SUPPORTED) showToast('먼저 엑셀 파일 연결을 해주세요', 'error');
+      e.stopPropagation();
+      if (!FS_API_SUPPORTED){
+        showToast('Chrome 또는 Edge에서 실행해주세요', 'error', 4000);
+      } else if (fileHandle){
+        saveToConnectedFile();
+      } else {
+        showToast('먼저 엑셀 파일 연결을 해주세요', 'error', 4000);
+      }
       return;
     }
     // Modal open: 다른 핸들러가 동작하지 않도록 차단 (ESC 닫기는 비활성화 — 실수 방지)
@@ -3663,7 +3725,8 @@
     if (document.getElementById('annual-bar-modal').classList.contains('is-open')){
       return;
     }
-  });
+  }
+  window.addEventListener('keydown', handleGlobalKeydown, { capture: true });
 
   // Warn before leaving if unsaved
   window.addEventListener('beforeunload', (e) => {
