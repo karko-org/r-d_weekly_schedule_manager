@@ -1442,6 +1442,86 @@
       task.fullEnd = nextFullEnd;
     }
   }
+  function getTaskFullRange(task, key){
+    if (!task) return null;
+    const parts = String(key || '').split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const fallbackStart = Number.isFinite(y) && Number.isFinite(m)
+      ? new Date(y, m, task.start)
+      : null;
+    const fallbackEnd = Number.isFinite(y) && Number.isFinite(m)
+      ? new Date(y, m, task.end)
+      : null;
+    const start = parseIsoDate(task.fullStart) || fallbackStart;
+    const end = parseIsoDate(task.fullEnd) || fallbackEnd;
+    if (!start || !end) return null;
+    start.setHours(0,0,0,0);
+    end.setHours(0,0,0,0);
+    return { start, end };
+  }
+  function getTaskPieces(task){
+    const pieces = [];
+    if (!task) return pieces;
+    Object.keys(monthData).forEach(key => {
+      const tasks = monthData[key] && monthData[key].tasks;
+      if (!Array.isArray(tasks)) return;
+      tasks.forEach(t => {
+        const sameGroup = task.groupId && t.groupId === task.groupId;
+        const sameTask = !task.groupId && t.id === task.id;
+        if (sameGroup || sameTask) pieces.push({ key, task:t });
+      });
+    });
+    return pieces;
+  }
+  function setTaskOrGroupRow(task, row){
+    if (!Number.isFinite(row)) return false;
+    const pieces = getTaskPieces(task);
+    if (!pieces.length) return false;
+    let didChange = false;
+    const idsByKey = new Map();
+    pieces.forEach(({key, task:t}) => {
+      if (!idsByKey.has(key)) idsByKey.set(key, []);
+      idsByKey.get(key).push(t.id);
+    });
+    pieces.forEach(({key, task:t}) => {
+      const arr = monthData[key] && monthData[key].tasks;
+      if (!Array.isArray(arr)) return;
+      evictConflictingPins(arr, idsByKey.get(key) || [t.id], row, t.start, t.end);
+      if (t.row !== row){
+        t.row = row;
+        didChange = true;
+      }
+    });
+    return didChange;
+  }
+  function shiftTaskRangeAcrossMonths(task, key, deltaDays, row){
+    if (!task) return false;
+    if (deltaDays === 0) return setTaskOrGroupRow(task, row);
+    const range = getTaskFullRange(task, key);
+    if (!range) return false;
+    const newStart = addDays(range.start, deltaDays);
+    const newEnd = addDays(range.end, deltaDays);
+    const groupId = task.groupId || ('g_' + Math.random().toString(36).slice(2, 9));
+    const rowToApply = Number.isFinite(row) ? row : task.row;
+    const pieces = getTaskPieces(task);
+    const base = (pieces[0] && pieces[0].task) || task;
+    const preservedSortIndex = typeof base.sortIndex === 'number' ? base.sortIndex : undefined;
+    removeTaskOrGroup(task);
+    const newPieces = distributeTaskAcrossMonths({
+      groupId,
+      sIso: fmtISO(newStart),
+      eIso: fmtISO(newEnd),
+      title: base.title || '',
+      notes: base.notes || '',
+      color: base.color || null,
+      done: !!base.done,
+      sortIndex: preservedSortIndex,
+      row: rowToApply
+    });
+    focusedTaskId = newPieces.length ? newPieces[0].id : null;
+    return newPieces.length > 0;
+  }
   // sortIndex를 조정해 task가 targetRow 위치에 오도록 — 같은 row에 있는 다른 바 위로 끼워넣기
   function placeTaskAtRow(key, draggedId, targetRow){
     // 이미 dragged가 targetRow에 있으면 no-op (불필요한 reorder 방지)
@@ -1586,27 +1666,44 @@
       barDragState.bar.style.pointerEvents = '';
       // 우선순위: 다른 task bar (위/아래) > 빈 배경 셀
       const barTarget = elBelow ? elBelow.closest('.cal-task-bar') : null;
-      if (barTarget && barTarget !== barDragState.bar && barTarget.dataset.monthKey === barDragState.monthKey){
+      if (barTarget && barTarget !== barDragState.bar && (calendarExpanded || barTarget.dataset.monthKey === barDragState.monthKey)){
         const rect = barTarget.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         barTarget.classList.add(e.clientY < midY ? 'is-drop-above' : 'is-drop-below');
       } else {
         const bgTarget = elBelow ? elBelow.closest('.cal-bg') : null;
-        if (bgTarget && bgTarget.dataset.monthKey === barDragState.monthKey){
+        if (bgTarget && (calendarExpanded || bgTarget.dataset.monthKey === barDragState.monthKey)){
           // 다일자 task 전체 너비 highlight — drop preview = 실제 landing area
           const sourceTask = monthData[barDragState.monthKey] && monthData[barDragState.monthKey].tasks.find(t => t.id === barDragState.taskId);
           const targetRow = parseInt(bgTarget.dataset.row, 10);
           if (sourceTask && Number.isFinite(targetRow)){
-            const duration = sourceTask.end - sourceTask.start + 1;
-            const isMulti = isMultiMonthGroup(sourceTask);
             const dayWidth = getCalendarDayWidth();
             const cursorDxPx = e.clientX - barDragState.startX;
-            const dayDelta = isMulti ? 0 : Math.round(cursorDxPx / dayWidth);
-            const newStart = sourceTask.start + dayDelta;
-            const newEnd = newStart + duration - 1;
-            for (let d = newStart; d <= newEnd; d++){
-              const cell = document.querySelector(`.cal-bg[data-row="${targetRow}"][data-day="${d}"][data-month-key="${barDragState.monthKey}"]`);
-              if (cell) cell.classList.add('is-drop-target');
+            const dayDelta = Math.round(cursorDxPx / dayWidth);
+            if (calendarExpanded){
+              const fullRange = getTaskFullRange(sourceTask, barDragState.monthKey);
+              if (fullRange){
+                const newStartDate = addDays(fullRange.start, dayDelta);
+                const newEndDate = addDays(fullRange.end, dayDelta);
+                let cursor = new Date(newStartDate);
+                while (cursor <= newEndDate){
+                  const cell = document.querySelector(`.cal-bg[data-row="${targetRow}"][data-year="${cursor.getFullYear()}"][data-month="${cursor.getMonth()}"][data-day="${cursor.getDate()}"]`);
+                  if (cell) cell.classList.add('is-drop-target');
+                  cursor = addDays(cursor, 1);
+                }
+              } else {
+                bgTarget.classList.add('is-drop-target');
+              }
+            } else {
+              const duration = sourceTask.end - sourceTask.start + 1;
+              const isMulti = isMultiMonthGroup(sourceTask);
+              const adjustedDayDelta = isMulti ? 0 : dayDelta;
+              const newStart = sourceTask.start + adjustedDayDelta;
+              const newEnd = newStart + duration - 1;
+              for (let d = newStart; d <= newEnd; d++){
+                const cell = document.querySelector(`.cal-bg[data-row="${targetRow}"][data-day="${d}"][data-month-key="${barDragState.monthKey}"]`);
+                if (cell) cell.classList.add('is-drop-target');
+              }
             }
           } else {
             bgTarget.classList.add('is-drop-target');
@@ -1637,21 +1734,30 @@
     if (sourceTask && (barInd || bgInd)){
       // 날짜 시프트: cursor가 실제로 가로로 움직인 픽셀을 dayWidth로 나눠 day 단위로 round.
       // 세로만 움직이면 dayDelta=0 → 가로로 밀리지 않음.
-      if (!isMultiMonthGroup(sourceTask)){
-        const dayWidth = getCalendarDayWidth();
-        const cursorDxPx = e.clientX - ended.startX;
-        const dayDelta = Math.round(cursorDxPx / dayWidth);
-        if (dayDelta !== 0){
-          if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, dayDelta)) didChange = true;
+      const dayWidth = getCalendarDayWidth();
+      const cursorDxPx = e.clientX - ended.startX;
+      const dayDelta = Math.round(cursorDxPx / dayWidth);
+      if (calendarExpanded){
+        const targetRow = barInd
+          ? parseInt(barInd.style.gridRow, 10) - 3
+          : parseInt(bgInd.dataset.row, 10);
+        const fallbackRow = parseInt(ended.bar.style.gridRow, 10) - 3;
+        const landingRow = Number.isFinite(targetRow) ? targetRow : fallbackRow;
+        if (shiftTaskRangeAcrossMonths(sourceTask, ended.monthKey, dayDelta, landingRow)) didChange = true;
+      } else {
+        if (!isMultiMonthGroup(sourceTask)){
+          if (dayDelta !== 0){
+            if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, dayDelta)) didChange = true;
+          }
         }
-      }
-      // Row 변경: pin 기반 (둘만 row 교환 또는 source만 pin, 다른 task는 bin-pack)
-      if (barInd){
-        if (pinSwapBars(ended.monthKey, ended.taskId, barInd.dataset.taskId)) didChange = true;
-      } else if (bgInd){
-        const targetRow = parseInt(bgInd.dataset.row, 10);
-        if (Number.isFinite(targetRow)){
-          if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow)) didChange = true;
+        // Row 변경: pin 기반 (둘만 row 교환 또는 source만 pin, 다른 task는 bin-pack)
+        if (barInd){
+          if (pinSwapBars(ended.monthKey, ended.taskId, barInd.dataset.taskId)) didChange = true;
+        } else if (bgInd){
+          const targetRow = parseInt(bgInd.dataset.row, 10);
+          if (Number.isFinite(targetRow)){
+            if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow)) didChange = true;
+          }
         }
       }
     }
@@ -3031,7 +3137,7 @@
 
   // sIso ~ eIso 범위를 월 경계로 쪼개 monthData[각 달].tasks에 조각으로 분산 저장.
   // 모든 조각은 동일 groupId + fullStart/fullEnd 공유해서 추후 한 번에 수정/삭제 가능.
-  function distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color, done, sortIndex }){
+  function distributeTaskAcrossMonths({ groupId, sIso, eIso, title, notes, color, done, sortIndex, row }){
     const sd = parseIsoDate(sIso);
     const ed = parseIsoDate(eIso);
     if (!sd || !ed) return [];
@@ -3063,6 +3169,10 @@
         fullEnd: eIso,
         sortIndex: pieceSortIndex
       };
+      if (Number.isFinite(row)){
+        evictConflictingPins(monthData[key].tasks, [], row, dayStart, dayEnd);
+        piece.row = row;
+      }
       monthData[key].tasks.push(piece);
       created.push(piece);
       cursor.setMonth(m2 + 1);
