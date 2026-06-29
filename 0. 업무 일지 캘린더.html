@@ -129,7 +129,7 @@
     50%{box-shadow:inset 0 0 0 2.5px var(--accent), 0 0 16px rgba(139,69,19,0.3)}
   }
   /* 바 내부 텍스트 — 한 줄 + ellipsis (truncate 책임) */
-  .cal-task-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0}
+  .cal-task-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0;text-align:center}
   /* Hover 툴팁 — body 직속 singleton, calendar-wrap clipping 회피 */
   .cal-tip{position:fixed;top:0;left:0;background:var(--surface);color:var(--ink);padding:10px 14px;border-radius:8px;border:1px solid var(--line);font-size:12px;font-weight:500;font-family:inherit;white-space:pre-wrap;max-width:360px;word-break:keep-all;box-shadow:0 8px 24px rgba(60,40,20,0.12);z-index:1000;pointer-events:none;line-height:1.5;opacity:0;visibility:hidden;transition:opacity .12s, visibility 0s .12s}
   .cal-tip.is-visible{opacity:1;visibility:visible;transition:opacity .12s, visibility 0s}
