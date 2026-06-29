@@ -1208,19 +1208,35 @@
 
   // ---------- Top bar ----------
   function renderMonthHeader(){
-    document.getElementById('month-title').textContent = `${currentYear}년 ${currentMonth+1}월`;
-    let label = '업무 계획';
-    if (currentYear === todayY && currentMonth === todayM) label = '이번 달';
-    document.getElementById('month-label').textContent = label;
+    if (calendarExpanded){
+      const { start, end } = getCurrentWeekRange();
+      document.getElementById('month-title').textContent = formatFullRangeLabel(start, end);
+      document.getElementById('month-label').textContent = '주간 일정';
+    } else {
+      document.getElementById('month-title').textContent = `${currentYear}년 ${currentMonth+1}월`;
+      let label = '업무 계획';
+      if (currentYear === todayY && currentMonth === todayM) label = '이번 달';
+      document.getElementById('month-label').textContent = label;
+    }
     const {start, end} = getTwRange();
     document.getElementById('tw-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
   }
 
   // 캘린더에 표시할 날짜 배열 생성 — 펼치기 모드면 오늘이 포함된 월~일 7일만 표시
   const MS_PER_DAY = 86400000;
+  function getCurrentWeekRange(){
+    const start = getThisWeekMonday(today);
+    start.setHours(0,0,0,0);
+    const end = addDays(start, 6);
+    end.setHours(0,0,0,0);
+    return { start, end };
+  }
+  function formatFullRangeLabel(start, end){
+    return `${start.getMonth()+1}월 ${start.getDate()}일 ~ ${end.getMonth()+1}월 ${end.getDate()}일`;
+  }
   function buildCalendarDates(){
     const start = calendarExpanded
-      ? getThisWeekMonday(today)
+      ? getCurrentWeekRange().start
       : new Date(currentYear, currentMonth, 1);
     start.setHours(0,0,0,0);
     const total = calendarExpanded ? 7 : daysInMonth(currentYear, currentMonth);
@@ -1234,12 +1250,6 @@
       });
     }
     return arr;
-  }
-  function formatCalendarRangeLabel(dates){
-    if (!calendarExpanded || dates.length === 0) return `${currentMonth+1}월`;
-    const start = dates[0].date;
-    const end = dates[dates.length - 1].date;
-    return `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
   }
   function dateColIndex(dates, dt){
     if (!dates.length) return -1;
@@ -1733,17 +1743,19 @@
     });
     const rowCount = Math.max(1, rows.length);
 
-    const labelCol = calendarExpanded ? '84px' : '56px';
     const dayCol = calendarExpanded ? `minmax(${CAL_EXPANDED_DAY_WIDTH}px, 1fr)` : 'minmax(26px, 1fr)';
-    grid.style.gridTemplateColumns = `${labelCol} repeat(${total}, ${dayCol})`;
+    const dayColumnOffset = calendarExpanded ? 1 : 2;
+    grid.style.gridTemplateColumns = calendarExpanded ? `repeat(${total}, ${dayCol})` : `56px repeat(${total}, ${dayCol})`;
     grid.style.gridTemplateRows = `auto auto repeat(${rowCount}, auto)`;
     grid.classList.toggle('is-expanded', calendarExpanded);
     grid.innerHTML = '';
 
-    const corner = document.createElement('div');
-    corner.className = 'cal-corner';
-    corner.textContent = `   일\n달`;
-    grid.appendChild(corner);
+    if (!calendarExpanded){
+      const corner = document.createElement('div');
+      corner.className = 'cal-corner';
+      corner.textContent = `   일\n달`;
+      grid.appendChild(corner);
+    }
 
     // 일자 헤더
     dates.forEach((meta, i) => {
@@ -1758,21 +1770,22 @@
       }
       el.textContent = meta.d;
       el.style.gridRow = '1';
-      el.style.gridColumn = String(i + 2);
+      el.style.gridColumn = String(i + dayColumnOffset);
       grid.appendChild(el);
     });
 
-    // 좌측 라벨: 기본은 현재 달, 주간 펼침은 월~일 범위
-    const monthLabel = document.createElement('div');
-    monthLabel.className = 'cal-corner';
-    monthLabel.style.gridColumn = '1';
-    monthLabel.style.gridRow = `2 / span ${1 + rowCount}`;
-    monthLabel.style.fontSize = '15px';
-    monthLabel.style.fontWeight = '700';
-    monthLabel.style.color = 'var(--ink)';
-    monthLabel.style.whiteSpace = 'normal';
-    monthLabel.textContent = formatCalendarRangeLabel(dates);
-    grid.appendChild(monthLabel);
+    if (!calendarExpanded){
+      const monthLabel = document.createElement('div');
+      monthLabel.className = 'cal-corner';
+      monthLabel.style.gridColumn = '1';
+      monthLabel.style.gridRow = `2 / span ${1 + rowCount}`;
+      monthLabel.style.fontSize = '15px';
+      monthLabel.style.fontWeight = '700';
+      monthLabel.style.color = 'var(--ink)';
+      monthLabel.style.whiteSpace = 'normal';
+      monthLabel.textContent = `${currentMonth+1}월`;
+      grid.appendChild(monthLabel);
+    }
 
     // 요일 헤더
     dates.forEach((meta, i) => {
@@ -1785,7 +1798,7 @@
       if (!meta.isCurrentMonth) el.classList.add('is-other-month');
       el.textContent = WEEKDAYS_KR[meta.weekday];
       el.style.gridRow = '2';
-      el.style.gridColumn = String(i + 2);
+      el.style.gridColumn = String(i + dayColumnOffset);
       grid.appendChild(el);
     });
 
@@ -1799,7 +1812,7 @@
         if (calendarExpanded || isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) bg.classList.add('is-highlight');
         if (!meta.isCurrentMonth) bg.classList.add('is-other-month');
         bg.style.gridRow = String(3 + r);
-        bg.style.gridColumn = String(i + 2);
+        bg.style.gridColumn = String(i + dayColumnOffset);
         bg.dataset.row = r;
         bg.dataset.year = meta.y;
         bg.dataset.month = meta.m;
@@ -1831,7 +1844,7 @@
       bar.dataset.taskId = t.id;
       bar.dataset.monthKey = monthKey(t._origY, t._origM);
       bar.style.gridRow = String(3 + t._row);
-      bar.style.gridColumn = `${t._startCol + 2} / ${t._endCol + 3}`;
+      bar.style.gridColumn = `${t._startCol + dayColumnOffset} / ${t._endCol + dayColumnOffset + 1}`;
       bar.addEventListener('mousedown', (e) => startBarDrag(e, bar));
       bar.addEventListener('click', () => {
         if (bar._suppressNextClick){ bar._suppressNextClick = false; return; }
@@ -3596,6 +3609,7 @@
     calendarExpanded = !calendarExpanded;
     localStorage.setItem(CAL_EXPANDED_KEY, calendarExpanded ? '1' : '0');
     syncCalendarExpandBtn();
+    renderMonthHeader();
     renderCalendar({ scrollToThisWeek: true });
   });
   syncCalendarExpandBtn();
