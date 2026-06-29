@@ -432,7 +432,7 @@
       <div class="month-title" id="month-title"></div>
     </div>
     <button class="nav-btn" id="next-month" aria-label="다음 달">▶</button>
-    <button class="cal-expand-btn" id="cal-expand-btn" aria-pressed="false" title="달력을 가로로 넓혀 업무 제목을 충분히 표시합니다">달력 펼치기</button>
+    <button class="cal-expand-btn" id="cal-expand-btn" aria-pressed="false" title="이번 주 월요일부터 일요일까지 넓게 표시합니다">주간 일정 펼치기</button>
     <button class="add-log-btn" id="add-log-btn">＋ 업무 일지 추가</button>
   </section>
 
@@ -607,7 +607,7 @@
   const TW_SORT_FIELD_KEY = 'kar_tw_sort_field_v1';
   const TW_SORT_DIR_KEY = 'kar_tw_sort_dir_v1';
   const CAL_EXPANDED_KEY = 'kar_calendar_expanded_v1';
-  const CAL_EXPANDED_DAY_WIDTH = 110; // 펼침 모드에서 날짜 셀 너비 (px)
+  const CAL_EXPANDED_DAY_WIDTH = 110; // 펼침 모드에서 날짜 셀 최소 너비 (px)
   let calendarExpanded = localStorage.getItem(CAL_EXPANDED_KEY) === '1';
 
   const FS_API_SUPPORTED = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
@@ -1216,25 +1216,30 @@
     document.getElementById('tw-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
   }
 
-  // 캘린더에 표시할 날짜 배열 생성 — 펼치기 모드면 전후 7일씩 추가
+  // 캘린더에 표시할 날짜 배열 생성 — 펼치기 모드면 오늘이 포함된 월~일 7일만 표시
   const MS_PER_DAY = 86400000;
   function buildCalendarDates(){
-    const days = daysInMonth(currentYear, currentMonth);
-    const PRE = calendarExpanded ? 7 : 0;
-    const POST = calendarExpanded ? 7 : 0;
-    const start = addDays(new Date(currentYear, currentMonth, 1), -PRE);
+    const start = calendarExpanded
+      ? getThisWeekMonday(today)
+      : new Date(currentYear, currentMonth, 1);
     start.setHours(0,0,0,0);
-    const total = PRE + days + POST;
+    const total = calendarExpanded ? 7 : daysInMonth(currentYear, currentMonth);
     const arr = [];
     for (let i = 0; i < total; i++){
       const dt = addDays(start, i); dt.setHours(0,0,0,0);
       arr.push({
         y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(),
         weekday: dt.getDay(), date: dt,
-        isCurrentMonth: (dt.getFullYear() === currentYear && dt.getMonth() === currentMonth)
+        isCurrentMonth: calendarExpanded || (dt.getFullYear() === currentYear && dt.getMonth() === currentMonth)
       });
     }
     return arr;
+  }
+  function formatCalendarRangeLabel(dates){
+    if (!calendarExpanded || dates.length === 0) return `${currentMonth+1}월`;
+    const start = dates[0].date;
+    const end = dates[dates.length - 1].date;
+    return `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
   }
   function dateColIndex(dates, dt){
     if (!dates.length) return -1;
@@ -1728,8 +1733,9 @@
     });
     const rowCount = Math.max(1, rows.length);
 
-    const dayCol = calendarExpanded ? `${CAL_EXPANDED_DAY_WIDTH}px` : 'minmax(26px, 1fr)';
-    grid.style.gridTemplateColumns = `56px repeat(${total}, ${dayCol})`;
+    const labelCol = calendarExpanded ? '84px' : '56px';
+    const dayCol = calendarExpanded ? `minmax(${CAL_EXPANDED_DAY_WIDTH}px, 1fr)` : 'minmax(26px, 1fr)';
+    grid.style.gridTemplateColumns = `${labelCol} repeat(${total}, ${dayCol})`;
     grid.style.gridTemplateRows = `auto auto repeat(${rowCount}, auto)`;
     grid.classList.toggle('is-expanded', calendarExpanded);
     grid.innerHTML = '';
@@ -1744,7 +1750,7 @@
       const el = document.createElement('div');
       el.className = 'cal-day-num';
       if (isTodayDay(meta.y, meta.m, meta.d)) el.classList.add('is-today');
-      else if (isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) el.classList.add('is-highlight');
+      else if (calendarExpanded || isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) el.classList.add('is-highlight');
       if (!meta.isCurrentMonth) el.classList.add('is-other-month');
       if (!meta.isCurrentMonth && meta.d === 1){
         el.classList.add('is-month-start');
@@ -1756,7 +1762,7 @@
       grid.appendChild(el);
     });
 
-    // 좌측 월 라벨 (현재 달 표시)
+    // 좌측 라벨: 기본은 현재 달, 주간 펼침은 월~일 범위
     const monthLabel = document.createElement('div');
     monthLabel.className = 'cal-corner';
     monthLabel.style.gridColumn = '1';
@@ -1765,7 +1771,7 @@
     monthLabel.style.fontWeight = '700';
     monthLabel.style.color = 'var(--ink)';
     monthLabel.style.whiteSpace = 'normal';
-    monthLabel.textContent = `${currentMonth+1}월`;
+    monthLabel.textContent = formatCalendarRangeLabel(dates);
     grid.appendChild(monthLabel);
 
     // 요일 헤더
@@ -1775,7 +1781,7 @@
       if (meta.weekday === 0) el.classList.add('is-sun');
       if (meta.weekday === 6) el.classList.add('is-sat');
       if (isTodayDay(meta.y, meta.m, meta.d)) el.classList.add('is-today');
-      else if (isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) el.classList.add('is-highlight');
+      else if (calendarExpanded || isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) el.classList.add('is-highlight');
       if (!meta.isCurrentMonth) el.classList.add('is-other-month');
       el.textContent = WEEKDAYS_KR[meta.weekday];
       el.style.gridRow = '2';
@@ -1790,7 +1796,7 @@
         bg.className = 'cal-bg';
         if (meta.weekday === 0) bg.classList.add('is-sunday');
         else if (meta.weekday === 6) bg.classList.add('is-weekend');
-        if (isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) bg.classList.add('is-highlight');
+        if (calendarExpanded || isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) bg.classList.add('is-highlight');
         if (!meta.isCurrentMonth) bg.classList.add('is-other-month');
         bg.style.gridRow = String(3 + r);
         bg.style.gridColumn = String(i + 2);
@@ -3583,7 +3589,8 @@
     const btn = document.getElementById('cal-expand-btn');
     if (!btn) return;
     btn.setAttribute('aria-pressed', String(calendarExpanded));
-    btn.textContent = calendarExpanded ? '달력 접기' : '달력 펼치기';
+    btn.textContent = calendarExpanded ? '월간 달력 보기' : '주간 일정 펼치기';
+    btn.title = calendarExpanded ? '이번 달 전체 달력으로 돌아갑니다' : '이번 주 월요일부터 일요일까지 넓게 표시합니다';
   }
   document.getElementById('cal-expand-btn').addEventListener('click', () => {
     calendarExpanded = !calendarExpanded;
