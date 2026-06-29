@@ -61,6 +61,7 @@
   .disconnect-btn:hover{color:var(--today);border-color:var(--today);background:var(--surface)}
 
   .month-control{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:16px 22px;background:var(--surface);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
+  .month-control.is-week-expanded .nav-btn{display:none}
   .nav-btn{width:36px;height:36px;border-radius:8px;font-size:13px;color:var(--ink-2);border:1px solid var(--line);background:var(--bg);transition:all .15s}
   .nav-btn:hover{border-color:var(--ink);color:var(--ink)}
   .month-display{flex:1;text-align:center;min-width:180px}
@@ -154,6 +155,7 @@
   .modal-done-row.is-checked .modal-done-text{color:var(--success)}
 
   .tw-section{background:var(--this-week);border:1px solid var(--this-week-border);border-radius:12px;padding:18px 22px;margin-bottom:14px;transition:padding .15s}
+  .tw-section.is-hidden{display:none}
   .tw-section.is-collapsed{padding-bottom:14px}
   .tw-section.is-collapsed .tw-header{margin-bottom:0;padding-bottom:0;border-bottom:none}
   .tw-section.is-collapsed .tw-list{display:none}
@@ -217,6 +219,7 @@
   .btn-link:hover{color:var(--ink)}
 
   .hint{margin-top:16px;font-size:12px;color:var(--muted);text-align:center;line-height:1.6}
+  .hint.is-hidden{display:none}
   .hint kbd{font-family:var(--mono);font-size:11px;padding:2px 6px;background:var(--surface);border:1px solid var(--line);border-radius:4px;color:var(--ink-2)}
 
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:12px 22px;background:var(--ink);color:var(--surface);border-radius:10px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.15);opacity:0;transition:opacity .2s;z-index:1000;pointer-events:none;max-width:80vw}
@@ -440,7 +443,7 @@
     <div class="calendar" id="calendar"></div>
   </section>
 
-  <section class="tw-section" id="tw-section">
+  <section class="tw-section is-hidden" id="tw-section">
     <div class="tw-header">
       <div class="tw-title-group">
         <div class="tw-week-toggle" role="tablist">
@@ -487,7 +490,7 @@
     </div>
   </section>
 
-  <p class="hint">
+  <p class="hint is-hidden">
     <strong>처음 사용:</strong> <kbd>엑셀 파일 연결</kbd>로 엑셀 파일 선택 → 기존 내용 불러오기 + 그 파일에 저장 가능해집니다<br>
     <strong>이후:</strong> <kbd>저장</kbd> 또는 <kbd>Ctrl+S</kbd> 누르면 연결된 파일에 조용히 덮어쓰기됩니다<br>
     <span style="color:var(--muted);font-size:11px">※ 파일 연결 창은 자동으로 이전에 선택한 엑셀 파일이 있던 폴더에서 열립니다</span>
@@ -3604,6 +3607,8 @@
     btn.setAttribute('aria-pressed', String(calendarExpanded));
     btn.textContent = calendarExpanded ? '월간 달력 보기' : '주간 일정 펼치기';
     btn.title = calendarExpanded ? '이번 달 전체 달력으로 돌아갑니다' : '이번 주 월요일부터 일요일까지 넓게 표시합니다';
+    const monthControl = document.querySelector('.month-control');
+    if (monthControl) monthControl.classList.toggle('is-week-expanded', calendarExpanded);
   }
   document.getElementById('cal-expand-btn').addEventListener('click', () => {
     calendarExpanded = !calendarExpanded;
