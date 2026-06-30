@@ -1377,6 +1377,26 @@
   function isExpandedDragState(state=barDragState){
     return !!state && state.calendarScope === 'weekly';
   }
+  function dateFromCell(cell){
+    if (!cell) return null;
+    const y = parseInt(cell.dataset.year, 10);
+    const m = parseInt(cell.dataset.month, 10);
+    const d = parseInt(cell.dataset.day, 10);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+    const dt = new Date(y, m, d);
+    dt.setHours(0,0,0,0);
+    return dt;
+  }
+  function getWeeklyDropDayDelta(state, sourceTask, targetCell){
+    const targetDate = dateFromCell(targetCell);
+    if (!targetDate || !sourceTask) return null;
+    const anchor = parseIsoDate(state.bar.dataset.segmentStart);
+    const fullRange = getTaskFullRange(sourceTask, state.monthKey);
+    const sourceDate = anchor || (fullRange && fullRange.start);
+    if (!sourceDate) return null;
+    sourceDate.setHours(0,0,0,0);
+    return Math.round((targetDate - sourceDate) / MS_PER_DAY);
+  }
   // Pin 기반: task의 .row 필드를 명시 row로 설정 (드래그 시 사용)
   // .row 있는 task는 bin-pack 무시하고 그 row에 강제 배치, 없는 task는 bin-pack 컴팩트 유지
   // 절대 invariant: 같은 row에 날짜 겹치는 두 task가 동시에 pin되지 않음 (eviction으로 보장)
@@ -1723,8 +1743,9 @@
           if (sourceTask && Number.isFinite(targetRow)){
             const dayWidth = getCalendarDayWidth(barDragState.root);
             const cursorDxPx = e.clientX - barDragState.startX;
-            const dayDelta = Math.round(cursorDxPx / dayWidth);
+            let dayDelta = Math.round(cursorDxPx / dayWidth);
             if (isExpandedDragState()){
+              dayDelta = getWeeklyDropDayDelta(barDragState, sourceTask, bgTarget) ?? dayDelta;
               const fullRange = getTaskFullRange(sourceTask, barDragState.monthKey);
               if (fullRange){
                 const newStartDate = addDays(fullRange.start, dayDelta);
@@ -1780,8 +1801,11 @@
       // 세로만 움직이면 dayDelta=0 → 가로로 밀리지 않음.
       const dayWidth = getCalendarDayWidth(ended.root);
       const cursorDxPx = e.clientX - ended.startX;
-      const dayDelta = Math.round(cursorDxPx / dayWidth);
+      let dayDelta = Math.round(cursorDxPx / dayWidth);
       if (isExpandedDragState()){
+        if (bgInd){
+          dayDelta = getWeeklyDropDayDelta(ended, sourceTask, bgInd) ?? dayDelta;
+        }
         const targetRow = barInd
           ? parseInt(barInd.style.gridRow, 10) - 3
           : parseInt(bgInd.dataset.row, 10);
@@ -2017,6 +2041,10 @@
       bar.dataset.taskId = t.id;
       bar.dataset.monthKey = monthKey(t._origY, t._origM);
       bar.dataset.calendarScope = expandedMode ? 'weekly' : 'monthly';
+      if (expandedMode){
+        const segmentDate = dates[t._startCol] && dates[t._startCol].date;
+        if (segmentDate) bar.dataset.segmentStart = fmtISO(segmentDate);
+      }
       bar.style.gridRow = String(3 + t._row);
       bar.style.gridColumn = `${t._startCol + dayColumnOffset} / ${t._endCol + dayColumnOffset + 1}`;
       bar.addEventListener('mousedown', (e) => startBarDrag(e, bar));
