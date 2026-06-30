@@ -1365,14 +1365,14 @@
     return true;
   }
   // 바 위에 drop 시 — 두 task의 시각적 row를 교환 (둘 다 pin)
-  function pinSwapBars(key, sourceId, targetId){
+  function pinSwapBars(key, sourceId, targetId, ended){
     if (!monthData[key]) return false;
     const arr = monthData[key].tasks;
     const src = arr.find(t => t.id === sourceId);
     const tgt = arr.find(t => t.id === targetId);
     if (!src || !tgt || src === tgt) return false;
-    const srcBar = document.querySelector(`.cal-task-bar[data-task-id="${sourceId}"]`);
-    const tgtBar = document.querySelector(`.cal-task-bar[data-task-id="${targetId}"]`);
+    const srcBar = ended.root ? ended.root.querySelector(`.cal-task-bar[data-task-id="${sourceId}"]`) : document.querySelector(`.cal-task-bar[data-task-id="${sourceId}"]`);
+    const tgtBar = ended.root ? ended.root.querySelector(`.cal-task-bar[data-task-id="${targetId}"]`) : document.querySelector(`.cal-task-bar[data-task-id="${targetId}"]`);
     if (!srcBar || !tgtBar) return false;
     const srcRow = parseInt(srcBar.style.gridRow, 10) - 3;
     const tgtRow = parseInt(tgtBar.style.gridRow, 10) - 3;
@@ -1530,9 +1530,9 @@
     return newPieces.length > 0;
   }
   // sortIndex를 조정해 task가 targetRow 위치에 오도록 — 같은 row에 있는 다른 바 위로 끼워넣기
-  function placeTaskAtRow(key, draggedId, targetRow){
+  function placeTaskAtRow(key, draggedId, targetRow, root){
     // 이미 dragged가 targetRow에 있으면 no-op (불필요한 reorder 방지)
-    const draggedBar = document.querySelector(`.cal-task-bar[data-task-id="${draggedId}"]`);
+    const draggedBar = root ? root.querySelector(`.cal-task-bar[data-task-id="${draggedId}"]`) : document.querySelector(`.cal-task-bar[data-task-id="${draggedId}"]`);
     if (draggedBar){
       const currentRow = parseInt(draggedBar.style.gridRow, 10) - 3;
       if (currentRow === targetRow) return false;
@@ -1592,16 +1592,16 @@
     if (dragGhostEl){ dragGhostEl.remove(); dragGhostEl = null; }
   }
   // FLIP — drop 후 영향받은 바들이 새 위치로 슬라이드
-  function snapshotBarPositions(){
+  function snapshotBarPositions(root = document){
     const positions = new Map();
-    document.querySelectorAll('.cal-task-bar[data-task-id]').forEach(bar => {
+    root.querySelectorAll('.cal-task-bar[data-task-id]').forEach(bar => {
       const r = bar.getBoundingClientRect();
       positions.set(bar.dataset.taskId, { x: r.left, y: r.top });
     });
     return positions;
   }
-  function animateBarsFromSnapshot(snapshot){
-    document.querySelectorAll('.cal-task-bar[data-task-id]').forEach(bar => {
+  function animateBarsFromSnapshot(snapshot, root = document){
+    root.querySelectorAll('.cal-task-bar[data-task-id]').forEach(bar => {
       const id = bar.dataset.taskId;
       const oldPos = snapshot.get(id);
       if (!oldPos) return;
@@ -1761,11 +1761,11 @@
         }
         // Row 변경: pin 기반 (둘만 row 교환 또는 source만 pin, 다른 task는 bin-pack)
         if (barInd){
-          if (pinSwapBars(ended.monthKey, ended.taskId, barInd.dataset.taskId)) didChange = true;
+          if (pinSwapBars(ended.monthKey, ended.taskId, barInd.dataset.taskId, ended)) didChange = true;
         } else if (bgInd){
           const targetRow = parseInt(bgInd.dataset.row, 10);
           if (Number.isFinite(targetRow)){
-            if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow)) didChange = true;
+            if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow, ended.root)) didChange = true;
           }
         }
       }
@@ -1774,13 +1774,13 @@
     clearDropIndicators();
 
     if (didChange){
-      const snapshot = snapshotBarPositions();
+      const snapshot = snapshotBarPositions(ended.root);
       destroyDragGhost();
       saveAllLocal();
       renderCalendar();
       renderWeeklyCalendar();
       renderThisWeek();
-      animateBarsFromSnapshot(snapshot);
+      animateBarsFromSnapshot(snapshot, ended.root);
     } else {
       destroyDragGhost();
     }
