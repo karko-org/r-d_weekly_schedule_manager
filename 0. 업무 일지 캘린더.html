@@ -367,6 +367,10 @@
   .cal-day-num.is-today,
   .cal-weekday.is-today{background:var(--today);color:#fff}
   .cal-task-bar{border-radius:4px;font-size:12.5px;min-height:29px;box-shadow:none}
+  .calendar:not(.is-expanded) .cal-day-num{padding:10px 2px}
+  .calendar:not(.is-expanded) .cal-weekday{padding:8px 2px}
+  .calendar:not(.is-expanded) .cal-bg{min-height:52px}
+  .calendar:not(.is-expanded) .cal-task-bar{min-height:36px;padding:6px 8px;margin:5px 2px}
   .cal-task-bar:hover{background:var(--bar-accent-bg);color:var(--bar-accent-ink)}
   .cal-task-ghost{transform:none;animation:none;box-shadow:0 10px 24px rgba(15,23,42,0.18),0 0 0 2px var(--accent)}
   .cal-task-bar.is-drop-above,
