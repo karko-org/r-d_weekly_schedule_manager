@@ -1667,9 +1667,37 @@
     if (!Number.isFinite(raw)) return NaN;
     return raw - (isMonthWeekGridMode() ? 2 : 3);
   }
+  function getDateFromDataset(el){
+    if (!el) return null;
+    const y = parseInt(el.dataset.year, 10);
+    const m = parseInt(el.dataset.month, 10);
+    const d = parseInt(el.dataset.day, 10);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+    const dt = new Date(y, m, d);
+    dt.setHours(0,0,0,0);
+    return dt;
+  }
+  function getWeekGridBgFromPoint(x, y){
+    if (!isMonthWeekGridMode()) return null;
+    const cells = document.querySelectorAll('.week-grid-bg');
+    for (const cell of cells){
+      const rect = cell.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return cell;
+    }
+    return null;
+  }
+  function getMonthWeekGridDayDelta(e, sourceTask, key, state){
+    const targetCell = getWeekGridBgFromPoint(e.clientX, e.clientY);
+    const targetDate = getDateFromDataset(targetCell);
+    if (!targetDate) return null;
+    const range = getTaskFullRange(sourceTask, key);
+    const anchorDate = parseIsoDate(state && state.anchorDateIso) || (range && range.start);
+    if (!anchorDate) return null;
+    return Math.round((targetDate - anchorDate) / MS_PER_DAY);
+  }
   function startBarDrag(e, bar){
     if (e.button !== 0) return;
-    barDragState = {
+    const nextState = {
       bar,
       taskId: bar.dataset.taskId,
       monthKey: bar.dataset.monthKey,
@@ -1677,6 +1705,16 @@
       startY: e.clientY,
       mode: null
     };
+    if (isMonthWeekGridMode() && bar.dataset.segmentStart){
+      const segStart = parseIsoDate(bar.dataset.segmentStart);
+      const segEnd = parseIsoDate(bar.dataset.segmentEnd) || segStart;
+      const rect = bar.getBoundingClientRect();
+      const segDays = segStart && segEnd ? Math.max(1, Math.round((segEnd - segStart) / MS_PER_DAY) + 1) : 1;
+      const ratio = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0;
+      const offsetDays = Math.max(0, Math.min(segDays - 1, Math.floor(ratio * segDays)));
+      if (segStart) nextState.anchorDateIso = fmtISO(addDays(segStart, offsetDays));
+    }
+    barDragState = nextState;
   }
   document.addEventListener('mousemove', (e) => {
     if (!barDragState) return;
@@ -1700,13 +1738,14 @@
       const elBelow = document.elementFromPoint(e.clientX, e.clientY);
       barDragState.bar.style.pointerEvents = '';
       // 우선순위: 다른 task bar (위/아래) > 빈 배경 셀
-      const barTarget = elBelow ? elBelow.closest('.cal-task-bar') : null;
-      if (barTarget && barTarget !== barDragState.bar && (calendarExpanded || isMonthWeekGridMode() || barTarget.dataset.monthKey === barDragState.monthKey)){
+      const gridBgTarget = isMonthWeekGridMode() ? getWeekGridBgFromPoint(e.clientX, e.clientY) : null;
+      const barTarget = (!isMonthWeekGridMode() && elBelow) ? elBelow.closest('.cal-task-bar') : null;
+      if (barTarget && barTarget !== barDragState.bar && (calendarExpanded || barTarget.dataset.monthKey === barDragState.monthKey)){
         const rect = barTarget.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         barTarget.classList.add(e.clientY < midY ? 'is-drop-above' : 'is-drop-below');
       } else {
-        const bgTarget = elBelow ? elBelow.closest('.cal-bg') : null;
+        const bgTarget = gridBgTarget || (elBelow ? elBelow.closest('.cal-bg') : null);
         if (bgTarget && (calendarExpanded || isMonthWeekGridMode() || bgTarget.dataset.monthKey === barDragState.monthKey)){
           // 다일자 task 전체 너비 highlight — drop preview = 실제 landing area
           const sourceTask = monthData[barDragState.monthKey] && monthData[barDragState.monthKey].tasks.find(t => t.id === barDragState.taskId);
@@ -1714,7 +1753,10 @@
           if (sourceTask && Number.isFinite(targetRow)){
             const dayWidth = getCalendarDayWidth();
             const cursorDxPx = e.clientX - barDragState.startX;
-            const dayDelta = Math.round(cursorDxPx / dayWidth);
+            const dayDelta = isMonthWeekGridMode()
+              ? getMonthWeekGridDayDelta(e, sourceTask, barDragState.monthKey, barDragState)
+              : Math.round(cursorDxPx / dayWidth);
+            if (dayDelta === null) return;
             if (calendarExpanded || isMonthWeekGridMode()){
               const fullRange = getTaskFullRange(sourceTask, barDragState.monthKey);
               if (fullRange){
@@ -1772,7 +1814,12 @@
       const dayWidth = getCalendarDayWidth();
       const cursorDxPx = e.clientX - ended.startX;
       const dayDelta = Math.round(cursorDxPx / dayWidth);
-      if (calendarExpanded || isMonthWeekGridMode()){
+      if (isMonthWeekGridMode()){
+        const gridDayDelta = getMonthWeekGridDayDelta(e, sourceTask, ended.monthKey, ended);
+        if (gridDayDelta !== null && gridDayDelta !== 0){
+          if (shiftTaskRangeAcrossMonths(sourceTask, ended.monthKey, gridDayDelta, sourceTask.row)) didChange = true;
+        }
+      } else if (calendarExpanded){
         const targetRow = barInd
           ? getDraggedBarRow(barInd)
           : parseInt(bgInd.dataset.row, 10);
@@ -1800,11 +1847,12 @@
     clearDropIndicators();
 
     if (didChange){
-      const snapshot = snapshotBarPositions();
+      const shouldAnimateDrop = !isMonthWeekGridMode();
+      const snapshot = shouldAnimateDrop ? snapshotBarPositions() : null;
       destroyDragGhost();
       saveAllLocal();
       renderCalendar();
-      animateBarsFromSnapshot(snapshot);
+      if (snapshot) animateBarsFromSnapshot(snapshot);
     } else {
       destroyDragGhost();
     }
@@ -1963,6 +2011,8 @@
         bar.dataset.tip = `${titleStr}${t.done ? ' [완료]' : ''}\n${seg.startDate.getMonth()+1}/${seg.startDate.getDate()} ~ ${seg.endDate.getMonth()+1}/${seg.endDate.getDate()}${t.notes ? '\n\n' + t.notes : ''}`;
         bar.dataset.taskId = t.id;
         bar.dataset.monthKey = monthKey(seg.y, seg.m);
+        bar.dataset.segmentStart = fmtISO(seg.segStart);
+        bar.dataset.segmentEnd = fmtISO(seg.segEnd);
         bar.style.gridColumn = `${seg.sCol + 1} / ${seg.eCol + 2}`;
         bar.style.gridRow = String(2 + seg.row);
         bar.addEventListener('mousedown', (e) => startBarDrag(e, bar));
