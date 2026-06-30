@@ -1659,6 +1659,14 @@
     without.splice(insertAt, 0, dragged);
     without.forEach((t, i) => { t.sortIndex = i; });
   }
+  function isMonthWeekGridMode(){
+    return !!(MONTH_WEEK_GRID_TEST && !calendarExpanded);
+  }
+  function getDraggedBarRow(bar){
+    const raw = parseInt(bar && bar.style ? bar.style.gridRow : '', 10);
+    if (!Number.isFinite(raw)) return NaN;
+    return raw - (isMonthWeekGridMode() ? 2 : 3);
+  }
   function startBarDrag(e, bar){
     if (e.button !== 0) return;
     barDragState = {
@@ -1693,13 +1701,13 @@
       barDragState.bar.style.pointerEvents = '';
       // 우선순위: 다른 task bar (위/아래) > 빈 배경 셀
       const barTarget = elBelow ? elBelow.closest('.cal-task-bar') : null;
-      if (barTarget && barTarget !== barDragState.bar && (calendarExpanded || barTarget.dataset.monthKey === barDragState.monthKey)){
+      if (barTarget && barTarget !== barDragState.bar && (calendarExpanded || isMonthWeekGridMode() || barTarget.dataset.monthKey === barDragState.monthKey)){
         const rect = barTarget.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         barTarget.classList.add(e.clientY < midY ? 'is-drop-above' : 'is-drop-below');
       } else {
         const bgTarget = elBelow ? elBelow.closest('.cal-bg') : null;
-        if (bgTarget && (calendarExpanded || bgTarget.dataset.monthKey === barDragState.monthKey)){
+        if (bgTarget && (calendarExpanded || isMonthWeekGridMode() || bgTarget.dataset.monthKey === barDragState.monthKey)){
           // 다일자 task 전체 너비 highlight — drop preview = 실제 landing area
           const sourceTask = monthData[barDragState.monthKey] && monthData[barDragState.monthKey].tasks.find(t => t.id === barDragState.taskId);
           const targetRow = parseInt(bgTarget.dataset.row, 10);
@@ -1707,7 +1715,7 @@
             const dayWidth = getCalendarDayWidth();
             const cursorDxPx = e.clientX - barDragState.startX;
             const dayDelta = Math.round(cursorDxPx / dayWidth);
-            if (calendarExpanded){
+            if (calendarExpanded || isMonthWeekGridMode()){
               const fullRange = getTaskFullRange(sourceTask, barDragState.monthKey);
               if (fullRange){
                 const newStartDate = addDays(fullRange.start, dayDelta);
@@ -1764,11 +1772,11 @@
       const dayWidth = getCalendarDayWidth();
       const cursorDxPx = e.clientX - ended.startX;
       const dayDelta = Math.round(cursorDxPx / dayWidth);
-      if (calendarExpanded){
+      if (calendarExpanded || isMonthWeekGridMode()){
         const targetRow = barInd
-          ? parseInt(barInd.style.gridRow, 10) - 3
+          ? getDraggedBarRow(barInd)
           : parseInt(bgInd.dataset.row, 10);
-        const fallbackRow = parseInt(ended.bar.style.gridRow, 10) - 3;
+        const fallbackRow = getDraggedBarRow(ended.bar);
         const landingRow = Number.isFinite(targetRow) ? targetRow : fallbackRow;
         if (shiftTaskRangeAcrossMonths(sourceTask, ended.monthKey, dayDelta, landingRow)) didChange = true;
       } else {
@@ -1957,6 +1965,7 @@
         bar.dataset.monthKey = monthKey(seg.y, seg.m);
         bar.style.gridColumn = `${seg.sCol + 1} / ${seg.eCol + 2}`;
         bar.style.gridRow = String(2 + seg.row);
+        bar.addEventListener('mousedown', (e) => startBarDrag(e, bar));
         bar.addEventListener('click', () => {
           focusedTaskId = t.id;
           renderCalendar();
