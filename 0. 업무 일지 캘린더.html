@@ -1754,18 +1754,35 @@
         const landingRow = Number.isFinite(targetRow) ? targetRow : fallbackRow;
         if (shiftTaskRangeAcrossMonths(sourceTask, ended.monthKey, dayDelta, landingRow)) didChange = true;
       } else {
-        if (!isMultiMonthGroup(sourceTask)){
+        if (isMultiMonthGroup(sourceTask)){
+          if (dayDelta !== 0){
+            const targetRow = barInd
+              ? parseInt(barInd.style.gridRow, 10) - 3
+              : (bgInd ? parseInt(bgInd.dataset.row, 10) : undefined);
+            const fallbackRow = parseInt(ended.bar.style.gridRow, 10) - 3;
+            const landingRow = Number.isFinite(targetRow) ? targetRow : fallbackRow;
+            if (shiftTaskRangeAcrossMonths(sourceTask, ended.monthKey, dayDelta, landingRow)) didChange = true;
+          } else {
+            if (barInd){
+              if (pinSwapBars(ended.monthKey, ended.taskId, barInd.dataset.taskId, ended)) didChange = true;
+            } else if (bgInd){
+              const targetRow = parseInt(bgInd.dataset.row, 10);
+              if (Number.isFinite(targetRow)){
+                if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow, ended.root)) didChange = true;
+              }
+            }
+          }
+        } else {
           if (dayDelta !== 0){
             if (shiftTaskDatesInMonth(sourceTask, ended.monthKey, dayDelta)) didChange = true;
           }
-        }
-        // Row 변경: pin 기반 (둘만 row 교환 또는 source만 pin, 다른 task는 bin-pack)
-        if (barInd){
-          if (pinSwapBars(ended.monthKey, ended.taskId, barInd.dataset.taskId, ended)) didChange = true;
-        } else if (bgInd){
-          const targetRow = parseInt(bgInd.dataset.row, 10);
-          if (Number.isFinite(targetRow)){
-            if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow, ended.root)) didChange = true;
+          if (barInd){
+            if (pinSwapBars(ended.monthKey, ended.taskId, barInd.dataset.taskId, ended)) didChange = true;
+          } else if (bgInd){
+            const targetRow = parseInt(bgInd.dataset.row, 10);
+            if (Number.isFinite(targetRow)){
+              if (placeTaskAtRow(ended.monthKey, ended.taskId, targetRow, ended.root)) didChange = true;
+            }
           }
         }
       }
