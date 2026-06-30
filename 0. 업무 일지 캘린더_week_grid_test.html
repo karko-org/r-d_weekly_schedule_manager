@@ -1815,9 +1815,14 @@
       const cursorDxPx = e.clientX - ended.startX;
       const dayDelta = Math.round(cursorDxPx / dayWidth);
       if (isMonthWeekGridMode()){
+        const targetCell = getWeekGridBgFromPoint(e.clientX, e.clientY);
+        const targetRow = targetCell ? parseInt(targetCell.dataset.row, 10) : NaN;
         const gridDayDelta = getMonthWeekGridDayDelta(e, sourceTask, ended.monthKey, ended);
+        const rowForDrop = Number.isFinite(targetRow) ? targetRow : sourceTask.row;
         if (gridDayDelta !== null && gridDayDelta !== 0){
-          if (shiftTaskRangeAcrossMonths(sourceTask, ended.monthKey, gridDayDelta, sourceTask.row)) didChange = true;
+          if (shiftTaskRangeAcrossMonths(sourceTask, ended.monthKey, gridDayDelta, rowForDrop)) didChange = true;
+        } else if (Number.isFinite(targetRow) && targetRow !== sourceTask.row){
+          if (setTaskOrGroupRow(sourceTask, targetRow)) didChange = true;
         }
       } else if (calendarExpanded){
         const targetRow = barInd
