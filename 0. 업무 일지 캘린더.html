@@ -276,11 +276,26 @@
     var(--surface);
     border:1px dashed var(--line)}
   .color-swatch.is-none.is-active{border-color:var(--ink);border-style:solid}
-  .color-custom{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);transition:all .12s}
-  .color-custom:hover{border-color:var(--ink-2);color:var(--ink-2)}
-  .color-custom input[type=color]{width:24px;height:24px;padding:0;border:none;background:none;cursor:pointer;border-radius:4px}
-  .color-custom input[type=color]::-webkit-color-swatch-wrapper{padding:0}
-  .color-custom input[type=color]::-webkit-color-swatch{border:1px solid var(--line);border-radius:4px}
+  .color-custom-dropdown-wrap { position: relative; display: inline-block; margin-left: 6px; }
+  .color-custom-btn { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--muted); cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 4px; }
+  .color-custom-btn:hover { border-color: var(--ink-2); color: var(--ink-2); }
+  .color-custom-dropdown { position: absolute; bottom: calc(100% + 6px); left: 0; width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 100; display: none; flex-direction: column; overflow: hidden; }
+  .color-custom-dropdown.is-open { display: flex; animation: dropdownFade .15s ease-out; }
+  @keyframes dropdownFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .custom-color-list { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; }
+  .custom-color-row { display: flex; align-items: center; padding: 6px 10px; gap: 8px; border-bottom: 1px solid var(--line-soft); transition: background .1s; }
+  .custom-color-row:hover { background: var(--bg); }
+  .custom-color-row.is-active { background: var(--accent-soft); }
+  .custom-color-label { flex: 1; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; text-align: left; }
+  .custom-color-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
+  .custom-color-row:hover .custom-color-actions { opacity: 1; }
+  .cc-action-btn { background: none; border: none; padding: 4px; cursor: pointer; font-size: 12px; color: var(--muted); border-radius: 4px; }
+  .cc-action-btn:hover { background: var(--surface); color: var(--ink); }
+  .cc-action-btn.is-delete:hover { color: var(--today); }
+  .custom-color-new { padding: 8px 10px; display: flex; align-items: center; gap: 8px; background: var(--bg); font-size: 12px; color: var(--muted); }
+  .custom-color-new input[type=color] { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); background: none; cursor: pointer; border-radius: 4px; }
+  .custom-color-new input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  .custom-color-new input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
 
   /* Annual (Sheet1) view */
   .annual-control{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:16px 22px;background:var(--surface);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
@@ -522,10 +537,16 @@
         <label class="modal-label">색상</label>
         <div class="color-picker">
           <div class="color-swatches" id="annual-modal-swatches" role="radiogroup" aria-label="바 배경색"></div>
-          <label class="color-custom">
-            <span>커스텀</span>
-            <input type="color" id="annual-modal-color-custom" aria-label="커스텀 색상" value="#ffffff">
-          </label>
+          <div class="color-custom-dropdown-wrap">
+            <button type="button" class="color-custom-btn" id="annual-modal-custom-btn">커스텀 ▼</button>
+            <div class="color-custom-dropdown" id="annual-modal-custom-dropdown">
+              <div class="custom-color-list" id="annual-modal-custom-list"></div>
+              <div class="custom-color-new">
+                <label style="flex:1;cursor:pointer;" for="annual-modal-color-custom">새 색상 지정</label>
+                <input type="color" id="annual-modal-color-custom" aria-label="커스텀 색상" value="#ffffff">
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-field">
@@ -573,10 +594,16 @@
         <label class="modal-label">색상</label>
         <div class="color-picker">
           <div class="color-swatches" id="task-modal-swatches" role="radiogroup" aria-label="바 배경색"></div>
-          <label class="color-custom">
-            <span>커스텀</span>
-            <input type="color" id="task-modal-color-custom" aria-label="커스텀 색상" value="#ffffff">
-          </label>
+          <div class="color-custom-dropdown-wrap">
+            <button type="button" class="color-custom-btn" id="task-modal-custom-btn">커스텀 ▼</button>
+            <div class="color-custom-dropdown" id="task-modal-custom-dropdown">
+              <div class="custom-color-list" id="task-modal-custom-list"></div>
+              <div class="custom-color-new">
+                <label style="flex:1;cursor:pointer;" for="task-modal-color-custom">새 색상 지정</label>
+                <input type="color" id="task-modal-color-custom" aria-label="커스텀 색상" value="#ffffff">
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-field">
@@ -645,6 +672,14 @@
   let twCollapsed = false; // 항상 펼침 상태
   const editingTwIds = new Set();
   let monthData = loadAll();
+  let customColorsDB = [];
+  try {
+    const loaded = JSON.parse(localStorage.getItem('KAR_CUSTOM_COLORS')) || [];
+    customColorsDB = loaded.map(c => typeof c === 'string' ? { hex: c, label: '커스텀' } : c);
+  } catch(e) { customColorsDB = []; }
+  function saveCustomColorsLocal() {
+    try { localStorage.setItem('KAR_CUSTOM_COLORS', JSON.stringify(customColorsDB)); } catch(e){}
+  }
   let focusedTaskId = null;
   function loadSortField(key){
     try { const v = localStorage.getItem(key); return (v === 'title') ? 'title' : 'date'; }
@@ -2261,6 +2296,26 @@
       const wb = XLSX.read(new Uint8Array(safeArrayBuffer), { type: 'array', cellStyles: true });
       // MCE-aware 색상 맵 — xlsx-js-style이 놓친 스타일 복구
       const mceColorMap = buildMceStyleMap(safeArrayBuffer);
+      if (wb.SheetNames.includes('ColorDB')) {
+        const ws = wb.Sheets['ColorDB'];
+        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:B1');
+        const newColors = [];
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          const cellA = ws[XLSX.utils.encode_cell({r, c: 0})];
+          const cellB = ws[XLSX.utils.encode_cell({r, c: 1})];
+          if (cellA && typeof cellA.v === 'string') {
+            const hex = cellA.v.trim().replace('#', '').toUpperCase();
+            const label = (cellB && typeof cellB.v === 'string') ? cellB.v.trim() : '커스텀';
+            if (hex.length === 6 && !newColors.some(c => c.hex === hex) && !ANNUAL_COLOR_PRESETS.some(p => p.hex === hex)) {
+              newColors.push({ hex, label });
+            }
+          }
+        }
+        if (newColors.length > 0) {
+          customColorsDB = newColors;
+          saveCustomColorsLocal();
+        }
+      }
       for (const sheetName of wb.SheetNames){
         const ws = wb.Sheets[sheetName];
         const kind = detectSheetKind(ws);
@@ -2892,6 +2947,16 @@
       appendMonthlySheet();
     }
 
+    if (customColorsDB && customColorsDB.length > 0) {
+      const colorData = customColorsDB.map(c => [c.hex, c.label]);
+      const colorWs = XLSX.utils.aoa_to_sheet(colorData);
+      if (wb.SheetNames.includes('ColorDB')) {
+        wb.Sheets['ColorDB'] = colorWs;
+      } else {
+        XLSX.utils.book_append_sheet(wb, colorWs, 'ColorDB');
+      }
+    }
+
     return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   }
 
@@ -3116,6 +3181,11 @@
     const color = document.getElementById('task-modal-swatches').dataset.selectedColor || null;
     const done = getModalDone();
 
+    if (color && !ANNUAL_COLOR_PRESETS.some(p => p.hex === color) && !customColorsDB.some(c => c.hex === color)) {
+      customColorsDB.push({ hex: color, label: title || '커스텀' });
+      saveCustomColorsLocal();
+    }
+
     // 기존 그룹/태스크 제거 후 월별 조각 재분산. 편집이면 원본 sortIndex를 보존해 stack 위치 유지.
     const groupId = (!isNew && task.groupId) ? task.groupId : ('g_' + Math.random().toString(36).slice(2, 9));
     const preservedSortIndex = (!isNew && task && typeof task.sortIndex === 'number') ? task.sortIndex : undefined;
@@ -3165,15 +3235,11 @@
 
   // 원본 엑셀에서 자주 쓰는 프리셋 팔레트 (hex, 대문자)
   const ANNUAL_COLOR_PRESETS = [
-    { hex: 'FAA4B0', label: '연분홍' },
+    { hex: 'FAA4B0', label: '핑크' },
     { hex: 'FFC000', label: '주황' },
     { hex: 'F9DB6F', label: '노랑' },
-    { hex: 'FFFF69', label: '밝은 노랑' },
-    { hex: 'C5E0B4', label: '연두' },
     { hex: 'A9D18E', label: '초록' },
-    { hex: '9DC3E6', label: '연파랑' },
-    { hex: 'B4C7E7', label: '파랑' },
-    { hex: 'C59EE2', label: '연보라' }
+    { hex: 'B4C7E7', label: '파랑' }
   ];
 
   // 범용 스와치 렌더러 — swatchesElId/customInputId를 받아 월간/연간 모두 지원
@@ -3200,6 +3266,73 @@
       btn.setAttribute('aria-checked', String(currentColor === p.hex));
       wrap.appendChild(btn);
     });
+    const isTask = swatchesElId === 'task-modal-swatches';
+    const listId = isTask ? 'task-modal-custom-list' : 'annual-modal-custom-list';
+    const customList = document.getElementById(listId);
+    if (customList) {
+      customList.innerHTML = '';
+      if (customColorsDB.length === 0) {
+        customList.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--muted);text-align:center;">저장된 색상이 없습니다.</div>';
+      } else {
+        customColorsDB.forEach(c => {
+          const row = document.createElement('div');
+          row.className = 'custom-color-row' + (currentColor === c.hex ? ' is-active' : '');
+          
+          const swatch = document.createElement('button');
+          swatch.type = 'button';
+          swatch.className = 'color-swatch';
+          swatch.style.background = '#' + c.hex;
+          swatch.dataset.color = c.hex;
+          swatch.onclick = () => { isTask ? selectTaskColor(c.hex) : selectBarColor(c.hex); };
+          
+          const label = document.createElement('span');
+          label.className = 'custom-color-label';
+          label.textContent = c.label;
+          label.title = `${c.label} (#${c.hex})`;
+          label.onclick = () => { swatch.click(); };
+          
+          const actions = document.createElement('div');
+          actions.className = 'custom-color-actions';
+          
+          const editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'cc-action-btn';
+          editBtn.textContent = '✏️';
+          editBtn.title = '수정';
+          editBtn.onclick = (e) => {
+            e.stopPropagation();
+            const newLabel = prompt('이 색상의 새 이름을 입력하세요:', c.label);
+            if (newLabel && newLabel.trim()) {
+              c.label = newLabel.trim();
+              saveCustomColorsLocal();
+              renderColorSwatches(swatchesElId, customInputId, document.getElementById(swatchesElId).dataset.selectedColor);
+            }
+          };
+          
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'cc-action-btn is-delete';
+          delBtn.textContent = '❌';
+          delBtn.title = '삭제';
+          delBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (confirm(`이 커스텀 색상(${c.label})을 삭제하시겠습니까?`)) {
+              customColorsDB = customColorsDB.filter(x => x.hex !== c.hex);
+              saveCustomColorsLocal();
+              const curr = document.getElementById(swatchesElId).dataset.selectedColor;
+              renderColorSwatches(swatchesElId, customInputId, curr === c.hex ? '' : curr);
+            }
+          };
+          
+          actions.appendChild(editBtn);
+          actions.appendChild(delBtn);
+          row.appendChild(swatch);
+          row.appendChild(label);
+          row.appendChild(actions);
+          customList.appendChild(row);
+        });
+      }
+    }
     const customInput = document.getElementById(customInputId);
     if (customInput){
       const isPreset = !currentColor || ANNUAL_COLOR_PRESETS.some(p => p.hex === currentColor);
@@ -3377,6 +3510,10 @@
     bar.startWeek = sWeek;
     bar.endWeek = eWeek;
     const color = document.getElementById('annual-modal-swatches').dataset.selectedColor || '';
+    if (color && !ANNUAL_COLOR_PRESETS.some(p => p.hex === color) && !customColorsDB.some(c => c.hex === color)) {
+      customColorsDB.push({ hex: color, label: bar.title || '커스텀' });
+      saveCustomColorsLocal();
+    }
     bar.color = color || null;
     syncAnnualModalChanges();
     closeAnnualBarModal();
@@ -3740,6 +3877,19 @@
   renderMonthHeader();
   renderCalendar({ scrollToThisWeek: true }); // 초기 로드 시 오늘 일자(이번주)로 자동 스크롤
   renderThisWeek();
+
+  document.addEventListener('click', (e) => {
+    if (e.target.matches('.color-custom-btn')) {
+      const dropdown = e.target.nextElementSibling;
+      const isOpen = dropdown.classList.contains('is-open');
+      document.querySelectorAll('.color-custom-dropdown').forEach(d => d.classList.remove('is-open'));
+      if (!isOpen) dropdown.classList.add('is-open');
+      return;
+    }
+    if (!e.target.closest('.color-custom-dropdown-wrap')) {
+      document.querySelectorAll('.color-custom-dropdown').forEach(d => d.classList.remove('is-open'));
+    }
+  });
 
   setView(currentView); // 마지막으로 본 시트 탭 복원
   restoreFileHandle();
