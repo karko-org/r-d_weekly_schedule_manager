@@ -76,6 +76,11 @@
   .cal-expand-btn[aria-pressed="true"]{background:var(--accent-mid);color:var(--bar-accent-ink);border-color:var(--accent-mid)}
 
   .calendar-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px;overflow-x:auto}
+  .weekly-calendar-section{margin-top:34px;margin-bottom:18px;padding:20px 24px 22px;background:var(--this-week);border-color:var(--this-week-border)}
+  .weekly-calendar-wrap{margin:14px 0 0;padding:12px;background:var(--surface);border-color:var(--this-week-border-soft)}
+  .weekly-calendar-wrap .calendar{min-width:760px}
+  .calendar.is-week-panel .cal-bg{min-height:56px}
+  .calendar.is-week-panel .cal-task-bar{min-height:42px;font-size:13px}
   /* 드래그로 좌우 스크롤 — 펼치기 모드에서만 grab 커서 노출 */
   .calendar-wrap:has(.calendar.is-expanded){cursor:grab}
   .calendar-wrap.is-dragging{cursor:grabbing!important;user-select:none}
@@ -439,7 +444,6 @@
       <div class="month-title" id="month-title"></div>
     </div>
     <button class="nav-btn" id="next-month" aria-label="다음 달">▶</button>
-    <button class="cal-expand-btn" id="cal-expand-btn" aria-pressed="false" title="이번 주 월요일부터 일요일까지 넓게 표시합니다">주간 일정 펼치기</button>
     <button class="add-log-btn" id="add-log-btn">＋ 업무 일지 추가</button>
   </section>
 
@@ -447,7 +451,7 @@
     <div class="calendar" id="calendar"></div>
   </section>
 
-  <section class="tw-section is-hidden" id="tw-section">
+  <section class="tw-section weekly-calendar-section" id="tw-section">
     <div class="tw-header">
       <div class="tw-title-group">
         <div class="tw-week-toggle" role="tablist">
@@ -458,23 +462,12 @@
         <span class="tw-badge" id="tw-badge">이번주 업무</span>
         <span class="tw-range" id="tw-range"></span>
       </div>
-      <div class="tw-header-right">
-        <select class="sort-select" id="tw-sort-field" aria-label="정렬 기준">
-          <option value="date">날짜순</option>
-          <option value="title">제목순</option>
-        </select>
-        <select class="sort-select" id="tw-sort-dir" aria-label="정렬 방향">
-          <option value="asc">오름차순</option>
-          <option value="desc">내림차순</option>
-        </select>
-        <span class="task-count" id="tw-count"></span>
-        <button class="tw-collapse-btn" id="tw-collapse-btn" aria-expanded="false" aria-label="접기/펼치기">
-          <span class="chevron">▶</span>
-          <span id="tw-collapse-label">펼치기</span>
-        </button>
-      </div>
+
     </div>
-    <div class="tw-list" id="tw-list"></div>
+    <div class="calendar-wrap weekly-calendar-wrap">
+      <div class="calendar is-expanded" id="weekly-calendar"></div>
+    </div>
+
   </section>
 
   </section><!-- /#monthly-panel -->
@@ -613,9 +606,8 @@
   const ANNUAL_YEAR_KEY = 'kar_current_annual_year_v1';
   const TW_SORT_FIELD_KEY = 'kar_tw_sort_field_v1';
   const TW_SORT_DIR_KEY = 'kar_tw_sort_dir_v1';
-  const CAL_EXPANDED_KEY = 'kar_calendar_expanded_v1';
-  const CAL_EXPANDED_DAY_WIDTH = 110; // 펼침 모드에서 날짜 셀 최소 너비 (px)
-  let calendarExpanded = localStorage.getItem(CAL_EXPANDED_KEY) === '1';
+  const CAL_EXPANDED_DAY_WIDTH = 110; // 주간 캘린더 날짜 셀 최소 너비 (px)
+  let calendarExpanded = false; // 월간 달력은 항상 월간 보기로 고정
 
   const FS_API_SUPPORTED = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 
@@ -641,16 +633,16 @@
   const todayM = today.getMonth();
   const todayD = today.getDate();
   const thisMon = getThisWeekMonday();
-  const thisFri = addDays(thisMon, 4);
+  const thisSun = addDays(thisMon, 6);
   const lastMon = addDays(thisMon, -7);
-  const lastFri = addDays(thisMon, -3);
+  const lastSun = addDays(thisMon, -1);
   const nextMon = addDays(thisMon, 7);
-  const nextFri = addDays(thisMon, 11);
+  const nextSun = addDays(thisMon, 13);
 
   let currentYear = todayY;
   let currentMonth = todayM;
   let twSelectedWeek = 'this'; // 'last' | 'this' | 'next' — 주간 섹션 토글
-  let twCollapsed = true; // 이번주/다음주 섹션 접힘 상태 — 기본 접힘
+  let twCollapsed = false; // 항상 펼침 상태
   const editingTwIds = new Set();
   let monthData = loadAll();
   let focusedTaskId = null;
@@ -882,9 +874,9 @@
     return taskEnd >= startDate && taskStart <= endDate;
   }
   function getTwRange(){
-    if (twSelectedWeek === 'last') return { start: lastMon, end: lastFri, label: '지난주' };
-    if (twSelectedWeek === 'next') return { start: nextMon, end: nextFri, label: '다음주' };
-    return { start: thisMon, end: thisFri, label: '이번주' };
+    if (twSelectedWeek === 'last') return { start: lastMon, end: lastSun, label: '지난주' };
+    if (twSelectedWeek === 'next') return { start: nextMon, end: nextSun, label: '다음주' };
+    return { start: thisMon, end: thisSun, label: '이번주' };
   }
   function isTodayDay(y,m,d){ return y===todayY && m===todayM && d===todayD; }
 
@@ -1215,21 +1207,15 @@
 
   // ---------- Top bar ----------
   function renderMonthHeader(){
-    if (calendarExpanded){
-      const { start, end } = getCurrentWeekRange();
-      document.getElementById('month-title').textContent = formatFullRangeLabel(start, end);
-      document.getElementById('month-label').textContent = '주간 일정';
-    } else {
-      document.getElementById('month-title').textContent = `${currentYear}년 ${currentMonth+1}월`;
-      let label = '업무 계획';
-      if (currentYear === todayY && currentMonth === todayM) label = '이번 달';
-      document.getElementById('month-label').textContent = label;
-    }
+    document.getElementById('month-title').textContent = `${currentYear}년 ${currentMonth+1}월`;
+    let label = '업무 계획';
+    if (currentYear === todayY && currentMonth === todayM) label = '이번 달';
+    document.getElementById('month-label').textContent = label;
     const {start, end} = getTwRange();
     document.getElementById('tw-range').textContent = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}`;
   }
 
-  // 캘린더에 표시할 날짜 배열 생성 — 펼치기 모드면 오늘이 포함된 월~일 7일만 표시
+  // 캘린더에 표시할 날짜 배열 생성
   const MS_PER_DAY = 86400000;
   function getCurrentWeekRange(){
     const start = getThisWeekMonday(today);
@@ -1242,18 +1228,30 @@
     return `${start.getMonth()+1}월 ${start.getDate()}일 ~ ${end.getMonth()+1}월 ${end.getDate()}일`;
   }
   function buildCalendarDates(){
-    const start = calendarExpanded
-      ? getCurrentWeekRange().start
-      : new Date(currentYear, currentMonth, 1);
+    const start = new Date(currentYear, currentMonth, 1);
     start.setHours(0,0,0,0);
-    const total = calendarExpanded ? 7 : daysInMonth(currentYear, currentMonth);
+    const total = daysInMonth(currentYear, currentMonth);
     const arr = [];
     for (let i = 0; i < total; i++){
       const dt = addDays(start, i); dt.setHours(0,0,0,0);
       arr.push({
         y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(),
         weekday: dt.getDay(), date: dt,
-        isCurrentMonth: calendarExpanded || (dt.getFullYear() === currentYear && dt.getMonth() === currentMonth)
+        isCurrentMonth: dt.getFullYear() === currentYear && dt.getMonth() === currentMonth
+      });
+    }
+    return arr;
+  }
+  function buildWeekCalendarDates(){
+    const { start } = getTwRange();
+    const weekStart = new Date(start);
+    weekStart.setHours(0,0,0,0);
+    const arr = [];
+    for (let i = 0; i < 7; i++){
+      const dt = addDays(weekStart, i); dt.setHours(0,0,0,0);
+      arr.push({
+        y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate(),
+        weekday: dt.getDay(), date: dt, isCurrentMonth: true
       });
     }
     return arr;
@@ -1336,10 +1334,13 @@
       el.classList.remove('is-drop-above', 'is-drop-below', 'is-drop-target');
     });
   }
-  function getCalendarDayWidth(){
-    const bg = document.querySelector('.cal-bg');
+  function getCalendarDayWidth(root=document){
+    const bg = root.querySelector ? root.querySelector('.cal-bg') : document.querySelector('.cal-bg');
     if (bg) return bg.getBoundingClientRect().width;
     return 30;
+  }
+  function isExpandedDragState(state=barDragState){
+    return !!state && state.calendarScope === 'weekly';
   }
   // Pin 기반: task의 .row 필드를 명시 row로 설정 (드래그 시 사용)
   // .row 있는 task는 bin-pack 무시하고 그 row에 강제 배치, 없는 task는 bin-pack 컴팩트 유지
@@ -1646,7 +1647,9 @@
       monthKey: bar.dataset.monthKey,
       startX: e.clientX,
       startY: e.clientY,
-      mode: null
+      mode: null,
+      calendarScope: bar.dataset.calendarScope || 'monthly',
+      root: bar.closest('.calendar') || document
     };
   }
   document.addEventListener('mousemove', (e) => {
@@ -1672,28 +1675,28 @@
       barDragState.bar.style.pointerEvents = '';
       // 우선순위: 다른 task bar (위/아래) > 빈 배경 셀
       const barTarget = elBelow ? elBelow.closest('.cal-task-bar') : null;
-      if (barTarget && barTarget !== barDragState.bar && (calendarExpanded || barTarget.dataset.monthKey === barDragState.monthKey)){
+      if (barTarget && barTarget !== barDragState.bar && (isExpandedDragState() || barTarget.dataset.monthKey === barDragState.monthKey)){
         const rect = barTarget.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         barTarget.classList.add(e.clientY < midY ? 'is-drop-above' : 'is-drop-below');
       } else {
         const bgTarget = elBelow ? elBelow.closest('.cal-bg') : null;
-        if (bgTarget && (calendarExpanded || bgTarget.dataset.monthKey === barDragState.monthKey)){
+        if (bgTarget && (isExpandedDragState() || bgTarget.dataset.monthKey === barDragState.monthKey)){
           // 다일자 task 전체 너비 highlight — drop preview = 실제 landing area
           const sourceTask = monthData[barDragState.monthKey] && monthData[barDragState.monthKey].tasks.find(t => t.id === barDragState.taskId);
           const targetRow = parseInt(bgTarget.dataset.row, 10);
           if (sourceTask && Number.isFinite(targetRow)){
-            const dayWidth = getCalendarDayWidth();
+            const dayWidth = getCalendarDayWidth(barDragState.root);
             const cursorDxPx = e.clientX - barDragState.startX;
             const dayDelta = Math.round(cursorDxPx / dayWidth);
-            if (calendarExpanded){
+            if (isExpandedDragState()){
               const fullRange = getTaskFullRange(sourceTask, barDragState.monthKey);
               if (fullRange){
                 const newStartDate = addDays(fullRange.start, dayDelta);
                 const newEndDate = addDays(fullRange.end, dayDelta);
                 let cursor = new Date(newStartDate);
                 while (cursor <= newEndDate){
-                  const cell = document.querySelector(`.cal-bg[data-row="${targetRow}"][data-year="${cursor.getFullYear()}"][data-month="${cursor.getMonth()}"][data-day="${cursor.getDate()}"]`);
+                  const cell = barDragState.root.querySelector(`.cal-bg[data-row="${targetRow}"][data-year="${cursor.getFullYear()}"][data-month="${cursor.getMonth()}"][data-day="${cursor.getDate()}"]`);
                   if (cell) cell.classList.add('is-drop-target');
                   cursor = addDays(cursor, 1);
                 }
@@ -1707,7 +1710,7 @@
               const newStart = sourceTask.start + adjustedDayDelta;
               const newEnd = newStart + duration - 1;
               for (let d = newStart; d <= newEnd; d++){
-                const cell = document.querySelector(`.cal-bg[data-row="${targetRow}"][data-day="${d}"][data-month-key="${barDragState.monthKey}"]`);
+                const cell = barDragState.root.querySelector(`.cal-bg[data-row="${targetRow}"][data-day="${d}"][data-month-key="${barDragState.monthKey}"]`);
                 if (cell) cell.classList.add('is-drop-target');
               }
             }
@@ -1740,10 +1743,10 @@
     if (sourceTask && (barInd || bgInd)){
       // 날짜 시프트: cursor가 실제로 가로로 움직인 픽셀을 dayWidth로 나눠 day 단위로 round.
       // 세로만 움직이면 dayDelta=0 → 가로로 밀리지 않음.
-      const dayWidth = getCalendarDayWidth();
+      const dayWidth = getCalendarDayWidth(ended.root);
       const cursorDxPx = e.clientX - ended.startX;
       const dayDelta = Math.round(cursorDxPx / dayWidth);
-      if (calendarExpanded){
+      if (isExpandedDragState()){
         const targetRow = barInd
           ? parseInt(barInd.style.gridRow, 10) - 3
           : parseInt(bgInd.dataset.row, 10);
@@ -1775,6 +1778,8 @@
       destroyDragGhost();
       saveAllLocal();
       renderCalendar();
+      renderWeeklyCalendar();
+      renderThisWeek();
       animateBarsFromSnapshot(snapshot);
     } else {
       destroyDragGhost();
@@ -1782,18 +1787,20 @@
   });
 
   function renderCalendar(opts = {}){
-    const grid = document.getElementById('calendar');
+    const expandedMode = !!opts.weekly;
+    const grid = opts.grid || document.getElementById(expandedMode ? 'weekly-calendar' : 'calendar');
+    if (!grid) return;
     // 사용자가 보고 있던 가로 스크롤 위치를 보존 — 단, opts.scrollToThisWeek=true면 무시
-    const wrapEl = document.querySelector('.calendar-wrap');
+    const wrapEl = grid.closest('.calendar-wrap');
     const prevScroll = wrapEl ? wrapEl.scrollLeft : 0;
-    const dates = buildCalendarDates();
+    const dates = expandedMode ? buildWeekCalendarDates() : buildCalendarDates();
     const total = dates.length;
     const rangeStart = dates[0].date;
     const rangeEnd = dates[total-1].date;
 
     // task → 컬럼 매핑
     const calTasks = [];
-    if (calendarExpanded){
+    if (expandedMode){
       const groups = collectExpandedTasks(rangeStart, rangeEnd);
       groups.forEach(({task, startDate, endDate, y, m}) => {
         const sCol = Math.max(0, dateColIndex(dates, startDate));
@@ -1856,14 +1863,15 @@
     });
     const rowCount = Math.max(1, rows.length);
 
-    const dayCol = calendarExpanded ? `minmax(${CAL_EXPANDED_DAY_WIDTH}px, 1fr)` : 'minmax(26px, 1fr)';
-    const dayColumnOffset = calendarExpanded ? 1 : 2;
-    grid.style.gridTemplateColumns = calendarExpanded ? `repeat(${total}, ${dayCol})` : `56px repeat(${total}, ${dayCol})`;
+    const dayCol = expandedMode ? `minmax(${CAL_EXPANDED_DAY_WIDTH}px, 1fr)` : 'minmax(26px, 1fr)';
+    const dayColumnOffset = expandedMode ? 1 : 2;
+    grid.style.gridTemplateColumns = expandedMode ? `repeat(${total}, ${dayCol})` : `56px repeat(${total}, ${dayCol})`;
     grid.style.gridTemplateRows = `auto auto repeat(${rowCount}, auto)`;
-    grid.classList.toggle('is-expanded', calendarExpanded);
+    grid.classList.toggle('is-expanded', expandedMode);
+    grid.classList.toggle('is-week-panel', expandedMode);
     grid.innerHTML = '';
 
-    if (!calendarExpanded){
+    if (!expandedMode){
       const corner = document.createElement('div');
       corner.className = 'cal-corner';
       corner.textContent = `   일\n달`;
@@ -1875,7 +1883,7 @@
       const el = document.createElement('div');
       el.className = 'cal-day-num';
       if (isTodayDay(meta.y, meta.m, meta.d)) el.classList.add('is-today');
-      else if (calendarExpanded || isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) el.classList.add('is-highlight');
+      else if (expandedMode || isInRange(meta.y, meta.m, meta.d, thisMon, thisSun)) el.classList.add('is-highlight');
       if (!meta.isCurrentMonth) el.classList.add('is-other-month');
       if (!meta.isCurrentMonth && meta.d === 1){
         el.classList.add('is-month-start');
@@ -1887,7 +1895,7 @@
       grid.appendChild(el);
     });
 
-    if (!calendarExpanded){
+    if (!expandedMode){
       const monthLabel = document.createElement('div');
       monthLabel.className = 'cal-corner';
       monthLabel.style.gridColumn = '1';
@@ -1907,7 +1915,7 @@
       if (meta.weekday === 0) el.classList.add('is-sun');
       if (meta.weekday === 6) el.classList.add('is-sat');
       if (isTodayDay(meta.y, meta.m, meta.d)) el.classList.add('is-today');
-      else if (calendarExpanded || isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) el.classList.add('is-highlight');
+      else if (expandedMode || isInRange(meta.y, meta.m, meta.d, thisMon, thisSun)) el.classList.add('is-highlight');
       if (!meta.isCurrentMonth) el.classList.add('is-other-month');
       el.textContent = WEEKDAYS_KR[meta.weekday];
       el.style.gridRow = '2';
@@ -1922,7 +1930,7 @@
         bg.className = 'cal-bg';
         if (meta.weekday === 0) bg.classList.add('is-sunday');
         else if (meta.weekday === 6) bg.classList.add('is-weekend');
-        if (calendarExpanded || isInRange(meta.y, meta.m, meta.d, thisMon, thisFri)) bg.classList.add('is-highlight');
+        if (expandedMode || isInRange(meta.y, meta.m, meta.d, thisMon, thisSun)) bg.classList.add('is-highlight');
         if (!meta.isCurrentMonth) bg.classList.add('is-other-month');
         bg.style.gridRow = String(3 + r);
         bg.style.gridColumn = String(i + dayColumnOffset);
@@ -1956,6 +1964,7 @@
       bar.dataset.tip = `${titleStr}${t.done ? ' [완료]' : ''}\n${t._origM+1}/${t.start} ~ ${t._origM+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
       bar.dataset.taskId = t.id;
       bar.dataset.monthKey = monthKey(t._origY, t._origM);
+      bar.dataset.calendarScope = expandedMode ? 'weekly' : 'monthly';
       bar.style.gridRow = String(3 + t._row);
       bar.style.gridColumn = `${t._startCol + dayColumnOffset} / ${t._endCol + dayColumnOffset + 1}`;
       bar.addEventListener('mousedown', (e) => startBarDrag(e, bar));
@@ -1963,6 +1972,7 @@
         if (bar._suppressNextClick){ bar._suppressNextClick = false; return; }
         focusedTaskId = t.id;
         renderCalendar();
+        renderWeeklyCalendar();
         openTaskModal(t, t._origY, t._origM);
       });
       bar.addEventListener('mouseenter', () => showCalTip(bar));
@@ -1974,9 +1984,14 @@
     // 그 외(task 클릭, 완료 토글, 인라인 편집 등)는 사용자가 보던 위치를 그대로 보존.
     if (opts.scrollToThisWeek){
       requestAnimationFrame(scrollToThisWeek);
-    } else if (calendarExpanded && wrapEl){
+    } else if (expandedMode && wrapEl){
       requestAnimationFrame(() => { wrapEl.scrollLeft = prevScroll; });
     }
+  }
+
+
+  function renderWeeklyCalendar(){
+    renderCalendar({ weekly: true });
   }
 
   function scrollToThisWeek(){
@@ -2017,140 +2032,9 @@
   }
 
   function renderThisWeek(){
-    const list = document.getElementById('tw-list');
-    const {start, end, label} = getTwRange();
-    const rawResults = getTasksOverlappingRange(start, end);
-    const results = sortResults(rawResults, twSortField, twSortDir);
-
-    // Update labels / button text that depend on selected week
+    renderWeeklyCalendar();
+    const {label} = getTwRange();
     document.getElementById('tw-badge').textContent = `${label} 업무`;
-    document.getElementById('tw-count').textContent = results.length ? `${results.length}건` : '';
-    list.innerHTML = '';
-
-    if (results.length === 0){
-      const empty = document.createElement('div');
-      empty.className = 'tw-empty';
-      empty.textContent = `— ${label} 예정 업무 없음 —`;
-      list.appendChild(empty);
-      return;
-    }
-
-    results.forEach(({ task, y, m, monthKey: mk }) => {
-      const item = document.createElement('div');
-      item.className = 'tw-item';
-      if (editingTwIds.has(task.id)) item.classList.add('is-editing');
-      if (task.done) item.classList.add('is-done');
-      item.dataset.id = task.id;
-      const days = daysInMonth(y, m);
-      const startD = new Date(y, m, task.start);
-      const endD = new Date(y, m, task.end);
-      const sameDay = task.start === task.end;
-      const dateStr = sameDay
-        ? `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]})`
-        : `${startD.getMonth()+1}/${startD.getDate()}(${WEEKDAYS_KR[startD.getDay()]}) - ${endD.getMonth()+1}/${endD.getDate()}(${WEEKDAYS_KR[endD.getDay()]})`;
-      item.innerHTML = `
-        <span class="done-toggle ${task.done ? 'is-checked' : ''}" role="checkbox" aria-checked="${!!task.done}" tabindex="0" title="${task.done ? '완료 해제' : '완료로 표시'}"></span>
-        <input class="tw-title-input" placeholder="업무 내용" value="${escapeAttr(task.title)}">
-        <div class="tw-dates-cell">
-          <div class="tw-dates">${dateStr}</div>
-          <div class="tw-dates-edit">
-            <input class="tw-day-input tw-day-start" type="number" min="1" max="${days}" value="${task.start}" aria-label="시작일">
-            <span class="tw-dates-sep">-</span>
-            <input class="tw-day-input tw-day-end" type="number" min="1" max="${days}" value="${task.end}" aria-label="종료일">
-          </div>
-        </div>
-        <button class="tw-edit" aria-label="수정" title="수정">${editingTwIds.has(task.id) ? '✓' : '✎'}</button>
-        <button class="task-remove" aria-label="삭제">×</button>
-      `;
-      const titleEl = item.querySelector('.tw-title-input');
-      const editBtn = item.querySelector('.tw-edit');
-      const startInput = item.querySelector('.tw-day-start');
-      const endInput = item.querySelector('.tw-day-end');
-      const doneToggle = item.querySelector('.done-toggle');
-      const removeBtn = item.querySelector('.task-remove');
-      doneToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleTaskDone(task); });
-      doneToggle.addEventListener('keydown', (e) => {
-        if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); toggleTaskDone(task); }
-      });
-      // 완료 상태이면 제목/날짜 편집 + 수정/삭제 버튼 비활성화
-      if (task.done){
-        titleEl.readOnly = true;
-        if (startInput) startInput.disabled = true;
-        if (endInput) endInput.disabled = true;
-        editBtn.disabled = true;
-        editBtn.title = '완료 해제 후 수정 가능';
-        removeBtn.disabled = true;
-        removeBtn.title = '완료 해제 후 삭제 가능';
-      }
-
-      titleEl.addEventListener('input', e => {
-        syncTaskTitleInGroup(task, e.target.value);
-        saveAllLocal(); renderCalendar();
-      });
-      // Enter → input 포커스 해제만 (값은 input 이벤트로 이미 저장됨)
-      titleEl.addEventListener('keydown', e => {
-        if (e.key === 'Enter'){
-          e.preventDefault();
-          titleEl.blur();
-        }
-      });
-
-      editBtn.addEventListener('click', () => {
-        // 인라인 편집 대신 상세 모달 열기 (저장/X로 명시적 처리)
-        focusedTaskId = task.id;
-        openTaskModal(task, y, m);
-      });
-
-      // 편집 모드 종료 (박스 밖 클릭 또는 ✓ 클릭)
-      const exitEditMode = () => {
-        editingTwIds.delete(task.id);
-        // 재렌더로 항목이 사라질 수 있으므로 renderThisWeek로 통째로 다시 그림
-        renderThisWeek();
-      };
-
-      // 박스 밖을 클릭했을 때 자동 종료
-      item.addEventListener('focusout', () => {
-        // 같은 박스 내부로 포커스가 이동한 건지 확인하려고 setTimeout으로 한 틱 지연
-        setTimeout(() => {
-          if (!editingTwIds.has(task.id)) return; // 이미 종료됨
-          if (item.contains(document.activeElement)) return; // 같은 박스 내부 이동
-          exitEditMode();
-        }, 0);
-      });
-
-      const onDayChange = () => {
-        let s = parseInt(startInput.value,10);
-        let e = parseInt(endInput.value,10);
-        if (!Number.isFinite(s)) s = 1;
-        if (!Number.isFinite(e)) e = s;
-        s = Math.max(1, Math.min(days, s));
-        e = Math.max(s, Math.min(days, e));
-        task.start = s; task.end = e;
-        startInput.value = s; endInput.value = e;
-        saveAllLocal();
-        renderCalendar();
-        // 편집 중에는 tw-list를 재렌더하지 않음 (포커스 손실 방지)
-        // 대신 이 항목의 표시 텍스트만 실시간 업데이트 (편집 종료 후 보여줄 값)
-        const nsd = new Date(y, m, s);
-        const ned = new Date(y, m, e);
-        const dStr = s === e
-          ? `${nsd.getMonth()+1}/${nsd.getDate()}(${WEEKDAYS_KR[nsd.getDay()]})`
-          : `${nsd.getMonth()+1}/${nsd.getDate()}(${WEEKDAYS_KR[nsd.getDay()]}) - ${ned.getMonth()+1}/${ned.getDate()}(${WEEKDAYS_KR[ned.getDay()]})`;
-        const datesView = item.querySelector('.tw-dates');
-        if (datesView) datesView.textContent = dStr;
-      };
-      startInput.addEventListener('change', onDayChange);
-      endInput.addEventListener('change', onDayChange);
-
-      item.querySelector('.task-remove').addEventListener('click', () => {
-        removeTaskOrGroup(task); // 여러 달 조각 전체 제거
-        editingTwIds.delete(task.id);
-        if (focusedTaskId === task.id) focusedTaskId = null;
-        saveAllLocal();
-        renderCalendar(); renderThisWeek();
-      });
-      list.appendChild(item);
-    });
   }
 
   // 단일 "업무 일지 추가" 버튼 — 기본 날짜는 현재 보고 있는 달 맥락으로 설정,
@@ -2162,7 +2046,7 @@
     let start = 1, end = 1;
     if (y === thisMon.getFullYear() && m === thisMon.getMonth()){
       start = thisMon.getDate();
-      end = (thisFri.getMonth() === m) ? thisFri.getDate() : days;
+      end = (thisSun.getMonth() === m) ? thisSun.getDate() : days;
     } else if (y === todayY && m === todayM){
       start = todayD; end = todayD;
     }
@@ -3233,9 +3117,7 @@
         // 각 조각의 월별 y/m은 monthData 키에서 유추 어려우니, fullStart/fullEnd 범위로 간단히 체크
         return parseIsoDate(p.fullStart) <= twEnd && parseIsoDate(p.fullEnd) >= twStart;
       });
-      if (inTw){
-        if (twCollapsed) setTwCollapsed(false);
-      }
+
     }
 
     syncModalChanges();
@@ -3706,32 +3588,13 @@
     currentYear = d.getFullYear();
     currentMonth = d.getMonth();
     focusedTaskId = null;
-    // 다른 달로 이동하면 주간 섹션(지난주/이번주/다음주)은 현재 달 컨텍스트와
-    // 맞지 않으므로 자동으로 접는다
-    if (!twCollapsed) setTwCollapsed(true);
+
     renderMonthHeader(); renderCalendar({ scrollToThisWeek: true });
   }
   document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('add-log-btn').addEventListener('click', addTaskLog);
 
-  function syncCalendarExpandBtn(){
-    const btn = document.getElementById('cal-expand-btn');
-    if (!btn) return;
-    btn.setAttribute('aria-pressed', String(calendarExpanded));
-    btn.textContent = calendarExpanded ? '월간 달력 보기' : '주간 일정 펼치기';
-    btn.title = calendarExpanded ? '이번 달 전체 달력으로 돌아갑니다' : '이번 주 월요일부터 일요일까지 넓게 표시합니다';
-    const monthControl = document.querySelector('.month-control');
-    if (monthControl) monthControl.classList.toggle('is-week-expanded', calendarExpanded);
-  }
-  document.getElementById('cal-expand-btn').addEventListener('click', () => {
-    calendarExpanded = !calendarExpanded;
-    localStorage.setItem(CAL_EXPANDED_KEY, calendarExpanded ? '1' : '0');
-    syncCalendarExpandBtn();
-    renderMonthHeader();
-    renderCalendar({ scrollToThisWeek: true });
-  });
-  syncCalendarExpandBtn();
 
   // 캘린더 클릭&드래그로 좌우 스크롤 — 미세 조정은 휠/트랙패드, 큰 이동은 드래그
   (function setupCalendarDragScroll(){
@@ -3796,27 +3659,8 @@
       });
     }
   }
-  bindSortSelects({
-    fieldId: 'tw-sort-field', dirId: 'tw-sort-dir',
-    fieldKey: TW_SORT_FIELD_KEY, dirKey: TW_SORT_DIR_KEY,
-    getField: () => twSortField, getDir: () => twSortDir,
-    setField: v => { twSortField = v; }, setDir: v => { twSortDir = v; },
-    onChange: () => renderThisWeek()
-  });
-  // 레거시 키 정리 (기존 단일 드롭다운 값이 로컬에 남아있다면 제거)
-  try { localStorage.removeItem('kar_all_sort_v1'); } catch(_){}
-  document.getElementById('tw-collapse-btn').addEventListener('click', () => setTwCollapsed(!twCollapsed));
-  function setTwCollapsed(collapsed){
-    twCollapsed = collapsed;
-    const section = document.getElementById('tw-section');
-    section.classList.toggle('is-collapsed', collapsed);
-    const btn = document.getElementById('tw-collapse-btn');
-    btn.setAttribute('aria-expanded', String(!collapsed));
-    const label = document.getElementById('tw-collapse-label');
-    if (label) label.textContent = collapsed ? '펼치기' : '접기';
-    // 접을 때 편집 모드였던 항목 정리
-    if (collapsed) editingTwIds.clear();
-  }
+
+
 
   document.getElementById('btn-connect').addEventListener('click', connectExcelFile);
   document.getElementById('btn-save').addEventListener('click', saveToConnectedFile);
@@ -3879,7 +3723,7 @@
   renderMonthHeader();
   renderCalendar({ scrollToThisWeek: true }); // 초기 로드 시 오늘 일자(이번주)로 자동 스크롤
   renderThisWeek();
-  setTwCollapsed(true); // 기본 접힘 상태로 시작
+
   setView(currentView); // 마지막으로 본 시트 탭 복원
   restoreFileHandle();
 })();
