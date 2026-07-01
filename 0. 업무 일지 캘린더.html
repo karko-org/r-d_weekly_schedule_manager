@@ -1397,6 +1397,17 @@
     sourceDate.setHours(0,0,0,0);
     return Math.round((targetDate - sourceDate) / MS_PER_DAY);
   }
+  function getWeeklyCellFromPoint(state, clientX, clientY){
+    if (!isExpandedDragState(state) || !state.root || !state.root.querySelectorAll) return null;
+    const cells = state.root.querySelectorAll('.cal-bg');
+    for (const cell of cells){
+      const rect = cell.getBoundingClientRect();
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom){
+        return cell;
+      }
+    }
+    return null;
+  }
   // Pin 기반: task의 .row 필드를 명시 row로 설정 (드래그 시 사용)
   // .row 있는 task는 bin-pack 무시하고 그 row에 강제 배치, 없는 task는 bin-pack 컴팩트 유지
   // 절대 invariant: 같은 row에 날짜 겹치는 두 task가 동시에 pin되지 않음 (eviction으로 보장)
@@ -1728,14 +1739,15 @@
       barDragState.bar.style.pointerEvents = 'none';
       const elBelow = document.elementFromPoint(e.clientX, e.clientY);
       barDragState.bar.style.pointerEvents = '';
-      // 우선순위: 다른 task bar (위/아래) > 빈 배경 셀
-      const barTarget = elBelow ? elBelow.closest('.cal-task-bar') : null;
+      // 우선순위: 주간 캘린더는 좌표 기반 날짜 셀 > 다른 task bar (위/아래) > 빈 배경 셀
+      const weeklyCell = getWeeklyCellFromPoint(barDragState, e.clientX, e.clientY);
+      const barTarget = weeklyCell ? null : (elBelow ? elBelow.closest('.cal-task-bar') : null);
       if (barTarget && barTarget !== barDragState.bar && (isExpandedDragState() || barTarget.dataset.monthKey === barDragState.monthKey)){
         const rect = barTarget.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         barTarget.classList.add(e.clientY < midY ? 'is-drop-above' : 'is-drop-below');
       } else {
-        const bgTarget = elBelow ? elBelow.closest('.cal-bg') : null;
+        const bgTarget = weeklyCell || (elBelow ? elBelow.closest('.cal-bg') : null);
         if (bgTarget && (isExpandedDragState() || bgTarget.dataset.monthKey === barDragState.monthKey)){
           // 다일자 task 전체 너비 highlight — drop preview = 실제 landing area
           const sourceTask = monthData[barDragState.monthKey] && monthData[barDragState.monthKey].tasks.find(t => t.id === barDragState.taskId);
@@ -1789,6 +1801,8 @@
     ended.bar.classList.remove('is-dragging');
     const barInd = document.querySelector('.cal-task-bar.is-drop-above, .cal-task-bar.is-drop-below');
     const bgInd = document.querySelector('.cal-bg.is-drop-target');
+    const weeklyCell = getWeeklyCellFromPoint(ended, e.clientX, e.clientY);
+    const activeBg = weeklyCell || bgInd;
     ended.bar._suppressNextClick = true; // 드래그였으니 click 이벤트 무시
 
     let didChange = false;
@@ -1796,19 +1810,19 @@
       ? monthData[ended.monthKey].tasks.find(t => t.id === ended.taskId)
       : null;
 
-    if (sourceTask && (barInd || bgInd)){
+    if (sourceTask && (barInd || activeBg)){
       // 날짜 시프트: cursor가 실제로 가로로 움직인 픽셀을 dayWidth로 나눠 day 단위로 round.
       // 세로만 움직이면 dayDelta=0 → 가로로 밀리지 않음.
       const dayWidth = getCalendarDayWidth(ended.root);
       const cursorDxPx = e.clientX - ended.startX;
       let dayDelta = Math.round(cursorDxPx / dayWidth);
-      if (isExpandedDragState()){
-        if (bgInd){
-          dayDelta = getWeeklyDropDayDelta(ended, sourceTask, bgInd) ?? dayDelta;
+      if (isExpandedDragState(ended)){
+        if (activeBg){
+          dayDelta = getWeeklyDropDayDelta(ended, sourceTask, activeBg) ?? dayDelta;
         }
-        const targetRow = barInd
-          ? parseInt(barInd.style.gridRow, 10) - 3
-          : parseInt(bgInd.dataset.row, 10);
+        const targetRow = activeBg
+          ? parseInt(activeBg.dataset.row, 10)
+          : (barInd ? parseInt(barInd.style.gridRow, 10) - 3 : NaN);
         const fallbackRow = parseInt(ended.bar.style.gridRow, 10) - 3;
         const landingRow = Number.isFinite(targetRow) ? targetRow : fallbackRow;
         if (shiftTaskRangeAcrossMonths(sourceTask, ended.monthKey, dayDelta, landingRow)) didChange = true;
