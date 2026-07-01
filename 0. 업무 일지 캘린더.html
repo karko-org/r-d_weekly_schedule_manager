@@ -2051,7 +2051,13 @@
       textSpan.className = 'cal-task-text';
       textSpan.textContent = titleStr;
       bar.replaceChildren(textSpan);
-      bar.dataset.tip = `${titleStr}${t.done ? ' [완료]' : ''}\n${t._origM+1}/${t.start} ~ ${t._origM+1}/${t.end}${t.notes ? '\n\n' + t.notes : ''}`;
+      const tipRange = (() => {
+        const full = expandedMode ? getTaskFullRange(t, monthKey(t._origY, t._origM)) : null;
+        const sDate = full ? full.start : new Date(t._origY, t._origM, t.start);
+        const eDate = full ? full.end : new Date(t._origY, t._origM, t.end);
+        return `${sDate.getMonth()+1}/${sDate.getDate()} ~ ${eDate.getMonth()+1}/${eDate.getDate()}`;
+      })();
+      bar.dataset.tip = `${titleStr}${t.done ? ' [완료]' : ''}\n${tipRange}${t.notes ? '\n\n' + t.notes : ''}`;
       bar.dataset.taskId = t.id;
       bar.dataset.monthKey = monthKey(t._origY, t._origM);
       bar.dataset.calendarScope = expandedMode ? 'weekly' : 'monthly';
