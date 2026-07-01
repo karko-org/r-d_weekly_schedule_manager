@@ -14,3 +14,6 @@ package-lock.json
 
 # Claude Code 로컬 설정
 .claude/settings.local.json
+
+# 테스트용 파일
+0. 업무 일지 캘린더_test.html
